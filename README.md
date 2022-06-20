@@ -24,4 +24,4 @@ docker compose run jax_v_torch
 1. navigate to any subfolder (for example `cd mnist/haiku/`)
 2. `python main.py`
 
-Feel free to edit any configs in `main.py` by editing the file or with commandline arguments. The config framework is [micro-config](https://github.com/Sea-Snell/micro_config).
+Feel free to edit any configs in `main.py` by editing the file or with command line arguments. The config framework is [micro-config](https://github.com/Sea-Snell/micro_config).
