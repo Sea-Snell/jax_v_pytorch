@@ -22,8 +22,8 @@ class MNISTData(Dataset):
     @staticmethod
     def collate(items):
         imgs, labels = zip(*items)
-        imgs, labels = jnp.array(np.stack(imgs, axis=0)), jnp.array(np.stack(labels, axis=0))
-        imgs, labels = jnp.reshape(imgs, (-1, 28*28)).astype(jnp.float32), jax.nn.one_hot(labels, 10)
+        imgs, labels = ((jnp.array(np.stack(imgs, axis=0)) / 128.0) - 1.0), jnp.array(np.stack(labels, axis=0))
+        imgs, labels = jnp.reshape(imgs, (-1, 28*28)), jax.nn.one_hot(labels, 10)
         return imgs, labels
 
 MLP_transformed = namedtuple('MLP_transformed', ['forward', 'loss'])

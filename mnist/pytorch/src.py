@@ -22,7 +22,7 @@ class MNISTData(Dataset):
     @staticmethod
     def collate(items):
         imgs, labels = zip(*items)
-        imgs, labels = np.array(np.stack(imgs, axis=0)), np.array(np.stack(labels, axis=0))
+        imgs, labels = ((np.array(np.stack(imgs, axis=0)) / 128.0) - 1.0), np.array(np.stack(labels, axis=0))
         imgs = np.reshape(imgs, (-1, 28*28)).astype(np.float32)
         return imgs, labels
 
