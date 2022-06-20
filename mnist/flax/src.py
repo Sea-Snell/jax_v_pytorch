@@ -23,7 +23,7 @@ class MNISTData(Dataset):
     @staticmethod
     def collate(items):
         imgs, labels = zip(*items)
-        imgs, labels = ((jnp.array(np.stack(imgs, axis=0)) / 128.0) - 1.0), jnp.array(np.stack(labels, axis=0))
+        imgs, labels = jnp.uint8(np.stack(imgs, axis=0)), jnp.uint8(np.stack(labels, axis=0))
         imgs, labels = jnp.reshape(imgs, (-1, 28*28)), jax.nn.one_hot(labels, 10)
         return imgs, labels
 
@@ -36,6 +36,7 @@ class MLP(nn.Module):
         self.dropouts = [nn.Dropout(self.dropout_rate) for _ in range(len(self.output_shapes)-1)]
     
     def __call__(self, x, *, train):
+        x = x.astype(jnp.float32) / 256.0
         for i in range(len(self.output_shapes)-1):
             x = self.linears[i](x)
             x = self.dropouts[i](x, deterministic=not train)
@@ -71,6 +72,7 @@ class MNISTCNN(nn.Module):
         self.linear2 = nn.Dense(10)
     
     def __call__(self, x, *, train):
+        x = x.astype(jnp.float32) / 256.0
         x = jnp.reshape(x, (-1, 28, 28, 1))
         x = self.block1(x)
         x = nn.max_pool(x, (2, 2), (2, 2), padding='VALID')

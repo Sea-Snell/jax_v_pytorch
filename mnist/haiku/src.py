@@ -22,7 +22,7 @@ class MNISTData(Dataset):
     @staticmethod
     def collate(items):
         imgs, labels = zip(*items)
-        imgs, labels = ((jnp.array(np.stack(imgs, axis=0)) / 128.0) - 1.0), jnp.array(np.stack(labels, axis=0))
+        imgs, labels = jnp.uint8(np.stack(imgs, axis=0)), jnp.uint8(np.stack(labels, axis=0))
         imgs, labels = jnp.reshape(imgs, (-1, 28*28)), jax.nn.one_hot(labels, 10)
         return imgs, labels
 
@@ -41,6 +41,8 @@ class MLP(hk.Module):
     
     def __call__(self, x, *, train):
         dropout_rate = self.dropout_rate if train else 0.0
+        
+        x = x.astype(jnp.float32) / 256.0
         for output_shape in self.output_shapes[:-1]:
             x = hk.Linear(output_shape)(x)
             x = hk.dropout(hk.next_rng_key(), dropout_rate, x)
@@ -70,6 +72,7 @@ class MNISTCNN(hk.Module):
         dropout_rate1 = 0.25 if train else 0.0
         dropout_rate2 = 0.5 if train else 0.0
 
+        x = x.astype(jnp.float32) / 256.0
         x = hk.Reshape((28, 28, 1))(x)
         x = hk.Sequential([
                 hk.Conv2D(32, kernel_shape=(5, 5), stride=1, padding='SAME'), 
