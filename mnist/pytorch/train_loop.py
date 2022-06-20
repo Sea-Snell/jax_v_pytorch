@@ -80,6 +80,7 @@ class TrainLoop(ConfigScript):
 
     def unroll(self, metaconfig: MetaConfig):
         print('using config:', asdict(self))
+        print('using device:', self.model.device.device_str)
         
         # save configs
         save_dir = metaconfig.convert_path(self.save_dir)

@@ -25,3 +25,11 @@ docker compose run jax_v_torch
 2. `python main.py`
 
 Feel free to edit any configs in `main.py` by editing the file or with command line arguments. The config framework is [micro-config](https://github.com/Sea-Snell/micro_config).
+
+## Implementations
+
+All implementations are meant to be identical modulo framework specific differences.
+
+* `mnist/pytorch/` implements MNIST training on a simple MLP in pytorch
+* `mnist/flax/` implements MNIST training on a simple MLP in flax
+* `mnist/haiku/` implements MNIST training on a simple MLP in haiku

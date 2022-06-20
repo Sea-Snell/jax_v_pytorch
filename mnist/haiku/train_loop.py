@@ -90,6 +90,7 @@ class TrainLoop(ConfigScript):
 
     def unroll(self, metaconfig: MetaConfig):
         print('using config:', asdict(self))
+        print('using device:', jax.devices()[0])
         
         # save configs
         save_dir = metaconfig.convert_path(self.save_dir)
