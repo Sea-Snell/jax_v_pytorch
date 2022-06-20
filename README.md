@@ -1,6 +1,6 @@
 # jax_v_pytorch
 
-A comparison of two different jax frameworks (haiku and flax) against pytorch. Currently MNIST training is the only comparison implemented, but more comparisons to come.
+A comparison of two different jax frameworks ([haiku](https://dm-haiku.readthedocs.io/en/latest/) and [flax](https://flax.readthedocs.io/en/latest/overview.html)) against [pytorch](https://pytorch.org). Currently MNIST training is the only comparison implemented, but more comparisons will be implemented.
 
 ## installation
 
