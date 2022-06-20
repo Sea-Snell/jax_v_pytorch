@@ -1,4 +1,4 @@
-from base_configs import MNISTDataConfig, MLPConfig, AdamWConfig, project_root
+from base_configs import MNISTDataConfig, MLPConfig, MNISTCNNConfig, AdamWConfig, project_root
 from torch_configs import DeviceConfig
 from train_loop import TrainLoop, StandardaEvaluator
 from micro_config import MetaConfig, deep_replace, parse_args
@@ -8,13 +8,21 @@ device = DeviceConfig.gpu_if_available()
 train_data = MNISTDataConfig(split='train')
 eval_data = MNISTDataConfig(split='test')
 
-model = MLPConfig(
+mlp_model = MLPConfig(
     shapes=[28*28, 128, 128, 10], 
     dropout=0.5, 
     checkpoint_path=None, 
     strict_load=True, 
     device=device, 
 )
+
+cnn_model = MNISTCNNConfig(
+    checkpoint_path=None, 
+    strict_load=True, 
+    device=device, 
+)
+
+model = cnn_model
 
 optim = AdamWConfig(
     lr=3e-4, 

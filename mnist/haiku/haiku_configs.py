@@ -20,7 +20,7 @@ class RNGSeed(ConfigScript):
 
 @dataclass
 class RNGSplit(ConfigScript):
-    seed: ConfigScript
+    seed: RNGSeed
     n_splits: int
 
     def unroll(self, metaconfig: MetaConfig) -> jax.random.KeyArray:

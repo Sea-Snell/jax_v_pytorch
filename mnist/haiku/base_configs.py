@@ -8,7 +8,7 @@ import mnist
 import haiku as hk
 import jax.numpy as jnp
 import optax
-from src import MLP, MNISTData
+from src import MLP, MNISTCNN, MNISTData
 import os
 
 project_root = os.path.dirname(__file__)
@@ -39,6 +39,12 @@ class MLPConfig(ConfigScriptModel):
     def unroll(self, metaconfig: MetaConfig) -> ModelConfigReturn:
         model = hk.multi_transform_with_state(partial(MLP.multi_transform_f, self.shapes[1:], self.dropout))
         return ModelConfigReturn(model, (jnp.zeros((1, self.shapes[0],)),), {'train': True})
+
+@dataclass
+class MNISTCNNConfig(ConfigScriptModel):
+    def unroll(self, metaconfig: MetaConfig) -> ModelConfigReturn:
+        model = hk.multi_transform_with_state(MNISTCNN.multi_transform_f)
+        return ModelConfigReturn(model, (jnp.zeros((1, 28*28,)),), {'train': True})
 
 @dataclass
 class AdamWConfig(ConfigScriptOptim):

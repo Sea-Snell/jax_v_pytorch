@@ -1,4 +1,4 @@
-from base_configs import MNISTDataConfig, MLPConfig, AdamWConfig, project_root
+from base_configs import MNISTDataConfig, MLPConfig, MNISTCNNConfig, AdamWConfig, project_root
 from flax_configs import RNGSeed, TrainStateConfig
 from train_loop import TrainLoop, StandardEvaluator
 from micro_config import MetaConfig, deep_replace, parse_args
@@ -8,13 +8,21 @@ seed = RNGSeed(0)
 train_data = MNISTDataConfig(split='train')
 eval_data = MNISTDataConfig(split='test')
 
-model = MLPConfig(
+mlp_model = MLPConfig(
     shapes=[28*28, 128, 128, 10], 
     dropout=0.5, 
     rng=seed.split(1), 
     checkpoint_path=None, 
     variables=None, 
 )
+
+cnn_model = MNISTCNNConfig(
+    rng=seed.split(2), 
+    checkpoint_path=None, 
+    variables=None, 
+)
+
+model = cnn_model
 
 optim = AdamWConfig(
     lr=3e-4, 
@@ -33,7 +41,7 @@ train_state = TrainStateConfig(
 evaluator = StandardEvaluator(
     eval_data=eval_data, 
     model=model, 
-    rng=seed.split(2), 
+    rng=seed.split(3), 
     bsize=32, 
     eval_batches=1, 
     dataloader_workers=0, 
@@ -44,7 +52,7 @@ train = TrainLoop(
     train_data=train_data, 
     train_state=train_state, 
     evaluator=evaluator, 
-    rng=seed.split(3), 
+    rng=seed.split(4), 
     save_dir='outputs/mnist_test/', 
     max_checkpoints=1, 
     epochs=10, 

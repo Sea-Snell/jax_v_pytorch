@@ -5,7 +5,7 @@ from micro_config import ConfigScript, MetaConfig
 from torch_configs import ConfigScriptModel, ConfigScriptOptim
 from dataclasses import dataclass
 import mnist
-from src import MLP, MNISTData
+from src import MLP, MNISTData, MNISTCNN
 import os
 import torch
 
@@ -36,6 +36,11 @@ class MLPConfig(ConfigScriptModel):
 
     def unroll(self, metaconfig: MetaConfig) -> torch.nn.Module:
         return MLP(self.shapes, self.dropout)
+
+@dataclass
+class MNISTCNNConfig(ConfigScriptModel):
+    def unroll(self, metaconfig: MetaConfig) -> torch.nn.Module:
+        return MNISTCNN()
 
 @dataclass
 class AdamWConfig(ConfigScriptOptim):

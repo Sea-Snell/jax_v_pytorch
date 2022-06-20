@@ -1,6 +1,6 @@
 from __future__ import annotations
 from collections import namedtuple
-from typing import Any, Callable, Optional, Union
+from typing import Any, Callable, Optional, Union, ClassVar
 from micro_config import ConfigScript, MetaConfig
 from dataclasses import dataclass
 import jax
@@ -23,7 +23,7 @@ class RNGSeed(ConfigScript):
 
 @dataclass
 class RNGSplit(ConfigScript):
-    seed: ConfigScript
+    seed: RNGSeed
     n_splits: int
 
     def unroll(self, metaconfig: MetaConfig) -> jax.random.KeyArray:

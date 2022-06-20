@@ -4,15 +4,23 @@ A comparison of two different jax frameworks ([haiku](https://dm-haiku.readthedo
 
 ## installation
 
-install with conda (cpu only):
+**install with conda (cpu):**
 
 ``` shell
 conda env create -f environment.yml
 conda activate jax_v_torch
 ```
 
-or install with docker (gpu only):
+**install with conda (gpu):**
+``` shell
+conda env create -f environment.yml
+conda activate jax_v_torch
+pip install --upgrade pip
+pip install --upgrade "jax[cuda]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+conda install pytorch cudatoolkit=11.3 -c pytorch
+```
 
+**install with docker (gpu only):**
 * install docker and docker compose
 * make sure to install nvidia-docker2 and NVIDIA Container Toolkit.
 ``` shell
@@ -30,6 +38,6 @@ Feel free to edit any configs in `main.py` by editing the file or with command l
 
 All implementations are meant to be identical modulo framework specific differences.
 
-* `mnist/pytorch/` implements MNIST training on a simple MLP in pytorch
-* `mnist/flax/` implements MNIST training on a simple MLP in flax
-* `mnist/haiku/` implements MNIST training on a simple MLP in haiku
+* `mnist/pytorch/` implements MNIST training on a simple MLP or CNN in pytorch
+* `mnist/flax/` implements MNIST training on a simple MLP or CNN in flax
+* `mnist/haiku/` implements MNIST training on a simple MLP or CNN in haiku
