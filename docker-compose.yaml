@@ -1,0 +1,15 @@
+version: '3.8'
+services:
+  jax_v_torch:
+    build: .
+    image: seasnell/jax_v_torch
+    volumes:
+     - "./:/app/jax_v_torch/"
+    working_dir: /app/
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
