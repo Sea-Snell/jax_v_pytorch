@@ -1,5 +1,4 @@
 from __future__ import annotations
-from functools import partial
 from typing import Callable, List
 from micro_config import ConfigScript, MetaConfig
 from torch_configs import ConfigScriptModel, ConfigScriptOptim

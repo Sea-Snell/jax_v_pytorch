@@ -2,7 +2,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from dataclasses import dataclass
 import torch
-from typing import Callable, Optional, Union
+from typing import Callable, Optional
 from micro_config import ConfigScript, MetaConfig
 
 @dataclass

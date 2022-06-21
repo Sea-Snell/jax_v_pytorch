@@ -10,7 +10,6 @@ import numpy as np
 import optax
 from src import MLP, SimpleCNN, ImageData
 import os
-import torchvision
 import torchvision.datasets as datasets
 
 project_root = os.path.dirname(__file__)
