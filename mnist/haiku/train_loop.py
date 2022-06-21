@@ -4,7 +4,6 @@ from micro_config import ConfigScript, ConfigScriptNoCache, MetaConfig
 from dataclasses import dataclass, asdict
 from collections import deque
 import jax
-import numpy as np
 import os
 import pickle as pkl
 import optax
@@ -14,6 +13,7 @@ from tqdm.auto import tqdm
 import wandb
 from haiku_configs import ConfigScriptModel, ConfigScriptOptim, ConfigScriptRNG
 import json
+from haiku_utils import batch_idxs
 
 @dataclass
 class StandardaEvaluator(ConfigScriptNoCache):
@@ -31,13 +31,10 @@ class StandardaEvaluator(ConfigScriptNoCache):
 
         # setup dataset
         eval_dataset = self.eval_data.unroll(metaconfig)
-        steps_per_epoch = len(eval_dataset) // self.bsize
         
         # get batch indexes
         rng, new_rng = jax.random.split(rng)
-        permutations = np.asarray(jax.random.permutation(new_rng, len(eval_dataset)))
-        permutations = permutations[:steps_per_epoch * self.bsize]
-        permutations = permutations.reshape(steps_per_epoch, self.bsize)
+        permutations = batch_idxs(new_rng, len(eval_dataset), self.bsize)
 
         # load model
         model, params, model_state = self.model.unroll(metaconfig)
@@ -117,7 +114,6 @@ class TrainLoop(ConfigScript):
         
         # setup dataset
         train_dataset = self.train_data.unroll(metaconfig)
-        steps_per_epoch = len(train_dataset) // self.bsize
 
         # setup training objects
         model, params, model_state = self.model.unroll(metaconfig)
@@ -145,9 +141,7 @@ class TrainLoop(ConfigScript):
 
             # get batch indexes
             rng, new_rng = jax.random.split(rng)
-            permutations = np.asarray(jax.random.permutation(new_rng, len(train_dataset)))
-            permutations = permutations[:steps_per_epoch * self.bsize]
-            permutations = permutations.reshape(steps_per_epoch, self.bsize)
+            permutations = batch_idxs(new_rng, len(train_dataset), self.bsize)
 
             for idxs in tqdm(permutations):
                 items = train_dataset[idxs]

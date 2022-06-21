@@ -2,13 +2,10 @@ from functools import partial
 from typing import Optional, Dict, Any
 from micro_config import ConfigScript, MetaConfig, ConfigScriptNoCache
 from dataclasses import dataclass, asdict
-from torch.utils.data.dataset import IterableDataset
-from torch.utils.data import DataLoader
 from flax_configs import TrainStateConfig, ConfigScriptModel, ConfigScriptRNG
-from flax_utils import rngs_from_keys
+from flax_utils import rngs_from_keys, batch_idxs
 from collections import deque
 import jax
-import numpy as np
 import os
 import pickle as pkl
 import chex
@@ -35,13 +32,10 @@ class StandardEvaluator(ConfigScriptNoCache):
 
         # setup dataset
         eval_dataset = self.eval_data.unroll(metaconfig)
-        steps_per_epoch = len(eval_dataset) // self.bsize
         
         # get batch indexes
         rng, new_rng = jax.random.split(rng)
-        permutations = np.asarray(jax.random.permutation(new_rng, len(eval_dataset)))
-        permutations = permutations[:steps_per_epoch * self.bsize]
-        permutations = permutations.reshape(steps_per_epoch, self.bsize)
+        permutations = batch_idxs(new_rng, len(eval_dataset), self.bsize)
 
         # load model
         model, variables, rng_keys = self.model.unroll(metaconfig)
@@ -123,7 +117,6 @@ class TrainLoop(ConfigScript):
         
         # setup dataset
         train_dataset = self.train_data.unroll(metaconfig)
-        steps_per_epoch = len(train_dataset) // self.bsize
 
         # setup training objects
         training_state, model, model_state, rng_keys = self.train_state.unroll(metaconfig)
@@ -152,9 +145,7 @@ class TrainLoop(ConfigScript):
 
             # get batch indexes
             rng, new_rng = jax.random.split(rng)
-            permutations = np.asarray(jax.random.permutation(new_rng, len(train_dataset)))
-            permutations = permutations[:steps_per_epoch * self.bsize]
-            permutations = permutations.reshape(steps_per_epoch, self.bsize)
+            permutations = batch_idxs(new_rng, len(train_dataset), self.bsize)
 
             for idxs in tqdm(permutations):
                 items = train_dataset[idxs]
