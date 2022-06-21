@@ -1,64 +1,56 @@
-from functools import partial
 from typing import Optional, Dict, Any
 from micro_config import ConfigScript, ConfigScriptNoCache, MetaConfig
 from dataclasses import dataclass, asdict
+from torch.utils.data.dataset import IterableDataset
+from torch.utils.data import DataLoader
 from collections import deque
-import jax
 import os
 import pickle as pkl
-import optax
-import chex
 from logs import label_logs, pool_logs, reduce_logs, log
 from tqdm.auto import tqdm
 import wandb
-from haiku_configs import ConfigScriptModel, ConfigScriptOptim, ConfigScriptRNG
+from torch_utils import to
+from torch_configs import ConfigScriptModel, ConfigScriptOptim
+import tree
+import torch
 import json
-from haiku_utils import batch_idxs
 
 @dataclass
 class StandardaEvaluator(ConfigScriptNoCache):
     eval_data: ConfigScript
     model: ConfigScriptModel
-    rng: ConfigScriptRNG
     bsize: int
     eval_batches: Optional[int]
+    dataloader_workers: int
     loss_kwargs: Dict[str, Any]
 
     def unroll(self, metaconfig: MetaConfig):
-
-        # get rng
-        rng = self.rng.unroll(metaconfig)
-
-        # setup dataset
+        # setup dataloader
         eval_dataset = self.eval_data.unroll(metaconfig)
-        
-        # get batch indexes
-        rng, new_rng = jax.random.split(rng)
-        permutations = batch_idxs(new_rng, len(eval_dataset), self.bsize)
+        train_data_loader_kwargs = {'num_workers': self.dataloader_workers, 
+                                    'batch_size': self.bsize, 
+                                    'collate_fn': eval_dataset.collate}
+        if not isinstance(eval_dataset, IterableDataset):
+            train_data_loader_kwargs['shuffle'] = True
+        eval_dataloader = DataLoader(eval_dataset, **train_data_loader_kwargs)
 
         # load model
-        model, params, model_state = self.model.unroll(metaconfig)
+        model = self.model.unroll(metaconfig)
+        device = self.model.device.unroll(metaconfig)
 
-        # define eval loss
-        @partial(jax.jit, static_argnames=list(self.loss_kwargs.keys()))
-        def eval_loss(params, model_state, rng, *args, **kwargs):
-            (_, logs,), _ = model.apply.loss(params, model_state, rng, *args, train=False, **kwargs)
-            return logs
-        
         # setup evaluator loop state
         eval_logs = []
 
         # eval on batches
-        for i, idxs in tqdm(enumerate(permutations)):
-            items = eval_dataset[idxs]
+        for i, items in enumerate(eval_dataloader):
             
             # conditionally terminate early
             if self.eval_batches is not None and i >= self.eval_batches:
                 break
 
             # get eval logs
-            rng, new_rng = jax.random.split(rng)
-            logs = eval_loss(params, model_state, new_rng, *items, **self.loss_kwargs)
+            items = to(tree.map_structure(lambda x: torch.tensor(x), items), device)
+            _, logs = model.loss(*items, **self.loss_kwargs)
             eval_logs.append(logs)
         
         # gather and postproc eval logs
@@ -72,23 +64,23 @@ class TrainLoop(ConfigScript):
     train_data: ConfigScript
     optim: ConfigScriptOptim
     evaluator: StandardaEvaluator
-    rng: ConfigScriptRNG
     save_dir: Optional[str]
     max_checkpoints: Optional[int]
     epochs: int
     max_steps: Optional[int]
     bsize: int
+    grad_accum_steps: int
     log_every: int
     eval_every: int
     save_every: Optional[int]
-    jit: bool
+    dataloader_workers: int
     use_wandb: bool
     wandb_project: str
     loss_kwargs: Dict[str, Any]
 
     def unroll(self, metaconfig: MetaConfig):
         print('using config:', asdict(self))
-        print('using device:', jax.devices()[0])
+        print('using device:', self.model.device.device_str)
         
         # save configs
         save_dir = metaconfig.convert_path(self.save_dir)
@@ -104,52 +96,41 @@ class TrainLoop(ConfigScript):
         if self.use_wandb:
             wandb.init(project=self.wandb_project, config=asdict(self))
         
-        # conditionally block jit
-        if not self.jit:
-            fake_jit = chex.fake_jit()
-            fake_jit.start()
-        
-        # get rng
-        rng = self.rng.unroll(metaconfig)
-        
-        # setup dataset
+        # setup dataloader
         train_dataset = self.train_data.unroll(metaconfig)
+        train_data_loader_kwargs = {'num_workers': self.dataloader_workers, 
+                                    'batch_size': self.bsize, 
+                                    'collate_fn': train_dataset.collate}
+        if not isinstance(train_dataset, IterableDataset):
+            train_data_loader_kwargs['shuffle'] = True
+        train_dataloader = DataLoader(train_dataset, **train_data_loader_kwargs)
 
         # setup training objects
-        model, params, model_state = self.model.unroll(metaconfig)
-        optim, opt_state = self.optim.unroll(metaconfig)
-
-        # define training step
-        @partial(jax.jit, static_argnums=(0,), static_argnames=list(self.loss_kwargs.keys()))
-        def step_fn(model, params, model_state, opt_state, rng, *args, **kwargs):
-            def grad_loss(params, model_state, rng, *args, **kwargs):
-                (loss, logs), model_state = model.apply.loss(params, model_state, rng, *args, **kwargs)
-                return loss, (logs, model_state,)
-            (_, (logs, model_state,)), grads = jax.value_and_grad(grad_loss, has_aux=True)(params, model_state, rng, *args, train=True, **kwargs)
-            updates, opt_state = optim.update(grads, opt_state, params=params)
-            params = optax.apply_updates(params, updates)
-            return logs, params, model_state, opt_state
+        model = self.model.unroll(metaconfig)
+        optim = self.optim.unroll(metaconfig)
+        device = self.model.device.unroll(metaconfig)
 
         # initalize training loop state
         step = 0
         train_logs = []
         best_perf = float('inf')
         saved_checkpoints = deque([])
+        model.train()
 
-        # train loop
+         # train loop
         for epoch in tqdm(range(self.epochs)):
-
-            # get batch indexes
-            rng, new_rng = jax.random.split(rng)
-            permutations = batch_idxs(new_rng, len(train_dataset), self.bsize)
-
-            for idxs in tqdm(permutations):
-                items = train_dataset[idxs]
-
-                # step model and accumulate training logs
-                rng, new_rng = jax.random.split(rng)
-                logs, params, model_state, opt_state = step_fn(model, params, model_state, opt_state, new_rng, *items, **self.loss_kwargs)
+            for items in tqdm(train_dataloader):
+                
+                # accumulate loss gradients and save training logs
+                items = to(tree.map_structure(lambda x: torch.tensor(x), items), device)
+                loss, logs = model.loss(*items, **self.loss_kwargs)
+                (loss / self.grad_accum_steps).backward()
                 train_logs.append(logs)
+                
+                # step accumulated gradients
+                if (step + 1) % self.grad_accum_steps == 0:
+                    optim.step()
+                    optim.zero_grad()
                 
                 # publish training logs
                 if (step + 1) % self.log_every == 0:
@@ -158,14 +139,16 @@ class TrainLoop(ConfigScript):
                     log(logs, self.use_wandb)
                 
                 # clear training logs
-                if (step + 1) % self.optim.grad_accum_steps == 0:
+                if (step + 1) % self.grad_accum_steps == 0:
                     train_logs = []
                 
                 # begin evaluation
                 if (step + 1) % self.eval_every == 0:
+                    
+                    # set model to eval mode
+                    model.eval()
 
                     # get eval logs
-                    self.evaluator.model.params, self.evaluator.model.state = params, model_state
                     eval_perf, eval_logs = self.evaluator.unroll(metaconfig)
 
                     # publish eval logs
@@ -175,12 +158,13 @@ class TrainLoop(ConfigScript):
                     # conditionally save best model and optimizer state
                     if save_dir is not None and eval_perf < best_perf:
                         print('new best eval loss! Saving ...')
-                        with open(os.path.join(save_dir, 'model.pkl'), 'wb') as f:
-                            pkl.dump((params, model_state,), f)
-                        with open(os.path.join(save_dir, 'optim.pkl'), 'wb') as f:
-                            pkl.dump(opt_state, f)
+                        torch.save(model.state_dict(), os.path.join(save_dir, 'model.pkl'))
+                        torch.save(optim.state_dict(), os.path.join(save_dir, 'optim.pkl'))
                         print('saved.')
                         best_perf = eval_perf
+                    
+                    # reset model to training mode
+                    model.train()
                 
                 # periodically save checkpoint
                 if save_dir is not None and self.save_every is not None and (step + 1) % self.save_every == 0:
@@ -191,8 +175,7 @@ class TrainLoop(ConfigScript):
                         os.system('rm -rf %s' % (saved_checkpoints.popleft()))
                     
                     # save
-                    with open(os.path.join(save_dir, 'model_%d.pkl' % (step)), 'wb') as f:
-                        pkl.dump((params, model_state,), f)
+                    torch.save(model.state_dict(), os.path.join(save_dir, 'model_%d.pkl' % (step)))
                     saved_checkpoints.append(os.path.join(save_dir, 'model_%d.pkl' % (step)))
                     print('saved.')
                 
@@ -202,8 +185,4 @@ class TrainLoop(ConfigScript):
                 # conditionally terminate
                 if self.max_steps is not None and step >= self.max_steps:
                     return
-        
-        # undo conditional jit block
-        if not self.jit:
-            fake_jit.stop()
 

@@ -5,12 +5,12 @@ import jax.numpy as jnp
 import haiku as hk
 import numpy as np
 import optax
-from logs import LogTuple
 
-class MNISTData:
-    def __init__(self, imgs, labels):
-        self.imgs = imgs.reshape(-1, 28*28)
+class ImageData:
+    def __init__(self, imgs: np.ndarray, labels: np.ndarray, n_labels: int):
+        self.imgs = imgs
         self.labels = labels
+        self.n_labels = n_labels
 
     def __len__(self):
         return self.imgs.shape[0]
@@ -18,7 +18,7 @@ class MNISTData:
     def __getitem__(self, idx: Union[int, np.ndarray]):
         imgs, labels = self.imgs[idx], self.labels[idx]
         imgs, labels = jnp.uint8(imgs), jnp.uint8(labels)
-        labels = jax.nn.one_hot(labels, 10, dtype=jnp.uint8)
+        labels = jax.nn.one_hot(labels, self.n_labels, dtype=jnp.uint8)
         return imgs, labels
 
 MLP_transformed = namedtuple('MLP_transformed', ['forward', 'loss'])
@@ -37,7 +37,8 @@ class MLP(hk.Module):
     def __call__(self, x, *, train):
         dropout_rate = self.dropout_rate if train else 0.0
         
-        x = x.astype(jnp.float32) / 256.0
+        x = x.astype(jnp.float32) / 255.0
+        x = hk.Flatten()(x)
         for output_shape in self.output_shapes[:-1]:
             x = hk.Linear(output_shape)(x)
             x = hk.dropout(hk.next_rng_key(), dropout_rate, x)
@@ -47,29 +48,28 @@ class MLP(hk.Module):
     
     def loss(self, x, y, *, train):
         y = y.astype(jnp.float32)
-        n = y.shape[0]
         predictions = self(x, train=train)
         loss = optax.softmax_cross_entropy(predictions, y).mean()
-        logs = {'loss': LogTuple(loss, n), 'acc': LogTuple((jnp.argmax(predictions, axis=1) == jnp.argmax(y, axis=1)).mean(), n)}
+        logs = {'loss': loss, 'acc': (jnp.argmax(predictions, axis=1) == jnp.argmax(y, axis=1)).mean()}
         return loss, logs
 
-MNISTCNN_transformed = namedtuple('MNISTCNN_transformed', ['forward', 'loss'])
+SimpleCNN_transformed = namedtuple('SimpleCNN_transformed', ['forward', 'loss'])
 
-class MNISTCNN(hk.Module):
-    def __init__(self):
-        super().__init__(name='mnist_cnn')
+class SimpleCNN(hk.Module):
+    def __init__(self, n_labels: int):
+        super().__init__(name='simple_cnn')
+        self.n_labels = n_labels
     
     @classmethod
     def multi_transform_f(cls, *args, **kwargs):
         model = cls(*args, **kwargs)
-        return model.__call__, MLP_transformed(model.__call__, model.loss)
+        return model.__call__, SimpleCNN_transformed(model.__call__, model.loss)
     
     def __call__(self, x, *, train):
         dropout_rate1 = 0.25 if train else 0.0
         dropout_rate2 = 0.5 if train else 0.0
 
-        x = x.astype(jnp.float32) / 256.0
-        x = hk.Reshape((28, 28, 1))(x)
+        x = x.astype(jnp.float32) / 255.0
         x = hk.Sequential([
                 hk.Conv2D(32, kernel_shape=(5, 5), stride=1, padding='SAME'), 
                 jax.nn.relu, 
@@ -90,13 +90,12 @@ class MNISTCNN(hk.Module):
         x = hk.Linear(128)(x)
         x = jax.nn.relu(x)
         x = hk.dropout(hk.next_rng_key(), dropout_rate2, x)
-        x = hk.Linear(10)(x)
+        x = hk.Linear(self.n_labels)(x)
         return x
     
     def loss(self, x, y, *, train):
         y = y.astype(jnp.float32)
-        n = y.shape[0]
         predictions = self(x, train=train)
         loss = optax.softmax_cross_entropy(predictions, y).mean()
-        logs = {'loss': LogTuple(loss, n), 'acc': LogTuple((jnp.argmax(predictions, axis=1) == jnp.argmax(y, axis=1)).mean(), n)}
+        logs = {'loss': loss, 'acc': (jnp.argmax(predictions, axis=1) == jnp.argmax(y, axis=1)).mean()}
         return loss, logs

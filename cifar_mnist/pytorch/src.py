@@ -8,10 +8,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class MNISTData(Dataset):
-    def __init__(self, imgs, labels):
+class ImageData(Dataset):
+    def __init__(self, imgs: np.ndarray, labels: np.ndarray, n_labels: int):
         self.imgs = imgs
         self.labels = labels
+        self.n_labels = n_labels
 
     def __len__(self):
         return self.imgs.shape[0]
@@ -23,7 +24,6 @@ class MNISTData(Dataset):
     def collate(items):
         imgs, labels = zip(*items)
         imgs, labels = np.array(np.stack(imgs, axis=0)), np.array(np.stack(labels, axis=0))
-        imgs = np.reshape(imgs, (-1, 28*28)).astype(np.float32)
         return imgs, labels
 
 class MLP(nn.Module):
@@ -38,7 +38,8 @@ class MLP(nn.Module):
         self.sequence = nn.Sequential(*items)
     
     def forward(self, x):
-        x = x / 256.0
+        x = x / 255.0
+        x = x.reshape(x.shape[0], -1)
         return self.sequence(x)
     
     def loss(self, x, y):
@@ -48,12 +49,11 @@ class MLP(nn.Module):
         logs = {'loss': LogTuple(loss, n), 'acc': LogTuple((torch.argmax(predictions, dim=1) == y).float().mean(), n)}
         return loss, logs
 
-class MNISTCNN(nn.Module):
-    def __init__(self):
+class SimpleCNN(nn.Module):
+    def __init__(self, img_size, n_channels, n_labels):
         super().__init__()
         self.sequence = nn.Sequential(
-            nn.Unflatten(dim=1, unflattened_size=(1, 28, 28)), 
-            nn.Conv2d(1, 32, kernel_size=(5, 5), stride=1, padding='same'), 
+            nn.Conv2d(n_channels, 32, kernel_size=(5, 5), stride=1, padding='same'), 
             nn.ReLU(), 
             nn.Conv2d(32, 32, kernel_size=(5, 5), stride=1, padding='same'), 
             nn.ReLU(), 
@@ -66,14 +66,14 @@ class MNISTCNN(nn.Module):
             nn.MaxPool2d(kernel_size=(2, 2), stride=2), 
             nn.Dropout(p=0.25), 
             nn.Flatten(start_dim=1, end_dim=-1), 
-            nn.Linear(64*7*7, 128), 
+            nn.Linear(64*(img_size // 4)*(img_size // 4), 128), 
             nn.ReLU(), 
             nn.Dropout(p=0.5), 
-            nn.Linear(128, 10), 
+            nn.Linear(128, n_labels), 
         )
     
     def forward(self, x):
-        x = x / 256.0
+        x = x / 255.0
         return self.sequence(x)
     
     def loss(self, x, y):
