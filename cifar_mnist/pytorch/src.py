@@ -5,7 +5,7 @@ from logs import LogTuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision
+import kornia.augmentation as K
 
 class ImageData(Dataset):
     def __init__(self, imgs: np.ndarray, labels: np.ndarray, n_labels: int):
@@ -28,10 +28,10 @@ class ImageData(Dataset):
 class DataAugmentation(nn.Module):
     def __init__(self, img_size: int, padding: int):
         super().__init__()
-        self.transforms = torchvision.transforms.Compose([
-            torchvision.transforms.RandomCrop(size=(img_size, img_size), pad_if_needed=True, padding_mode='edge', padding=padding), 
-            torchvision.transforms.RandomHorizontalFlip(p=0.5), 
-        ])
+        self.transforms = nn.Sequential(
+            K.RandomCrop(size=(img_size, img_size), pad_if_needed=True, padding_mode='replicate', padding=padding), 
+            K.RandomHorizontalFlip(p=0.5), 
+        )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.transforms(x)

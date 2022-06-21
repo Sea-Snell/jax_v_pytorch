@@ -130,13 +130,13 @@ if __name__ == "__main__":
     # Train for 10 epochs on every setting of model and dataset. Comment out the ones you don't want to train.
     runs = [
         ('MLP_MNIST', mnist_train_data, mnist_eval_data, mnist_mlp_model), 
-        # ('CNN_MNIST', mnist_train_data, mnist_eval_data, mnist_cnn_model), 
-        # ('MLP_FashionMNIST', fashion_mnist_train_data, fashion_mnist_eval_data, mnist_mlp_model), 
-        # ('CNN_FashionMNIST', fashion_mnist_train_data, fashion_mnist_eval_data, mnist_cnn_model), 
-        # ('MLP_CIFAR10', cifar10_train_data, cifar10_eval_data, cifar10_mlp_model), 
-        # ('CNN_CIFAR10', cifar10_train_data, cifar10_eval_data, cifar10_cnn_model), 
-        # ('MLP_CIFAR100', cifar100_train_data, cifar100_eval_data, cifar100_mlp_model), 
-        # ('CNN_CIFAR100', cifar100_train_data, cifar100_eval_data, cifar100_cnn_model), 
+        ('CNN_MNIST', mnist_train_data, mnist_eval_data, mnist_cnn_model), 
+        ('MLP_FashionMNIST', fashion_mnist_train_data, fashion_mnist_eval_data, mnist_mlp_model), 
+        ('CNN_FashionMNIST', fashion_mnist_train_data, fashion_mnist_eval_data, mnist_cnn_model), 
+        ('MLP_CIFAR10', cifar10_train_data, cifar10_eval_data, cifar10_mlp_model), 
+        ('CNN_CIFAR10', cifar10_train_data, cifar10_eval_data, cifar10_cnn_model), 
+        ('MLP_CIFAR100', cifar100_train_data, cifar100_eval_data, cifar100_mlp_model), 
+        ('CNN_CIFAR100', cifar100_train_data, cifar100_eval_data, cifar100_cnn_model), 
     ]
 
     for name, train_data, eval_data, model in runs:

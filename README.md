@@ -36,6 +36,12 @@ docker compose build
 docker compose run jax_v_torch
 ```
 
+And then in the new container shell that pops up:
+
+``` shell
+cd jax_v_torch
+```
+
 ## Running
 
 1. navigate to any subfolder (for example `cd cifar_mnist/haiku/`)
