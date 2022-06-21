@@ -25,8 +25,14 @@ class StandardEvaluator(ConfigScriptNoCache):
     prefetch_batches: Optional[int]
     eval_batches: Optional[int]
     loss_kwargs: Dict[str, Any]
+    jit: bool
 
     def unroll(self, metaconfig: MetaConfig):
+
+        # conditionally block jit
+        if not self.jit:
+            fake_jit = chex.fake_jit()
+            fake_jit.start()
 
         # get rng
         rng = self.rng.unroll(metaconfig)
@@ -69,6 +75,10 @@ class StandardEvaluator(ConfigScriptNoCache):
         
         # gather and postproc eval logs
         eval_logs = pool_logs(reduce_logs(eval_logs))
+
+        # undo conditional jit block
+        if not self.jit:
+            fake_jit.stop()
 
         return eval_logs['loss'], eval_logs
 

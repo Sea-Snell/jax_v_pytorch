@@ -1,5 +1,3 @@
-from collections import namedtuple
-from re import L
 from typing import List
 import numpy as np
 from torch.utils.data import Dataset
@@ -7,6 +5,7 @@ from logs import LogTuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision
 
 class ImageData(Dataset):
     def __init__(self, imgs: np.ndarray, labels: np.ndarray, n_labels: int):
@@ -26,19 +25,34 @@ class ImageData(Dataset):
         imgs, labels = np.array(np.stack(imgs, axis=0)), np.array(np.stack(labels, axis=0))
         return imgs, labels
 
+class DataAugmentation(nn.Module):
+    def __init__(self, img_size: int, padding: int):
+        super().__init__()
+        self.transforms = torchvision.transforms.Compose([
+            torchvision.transforms.RandomCrop(size=(img_size, img_size), pad_if_needed=True, padding_mode='edge', padding=padding), 
+            torchvision.transforms.RandomHorizontalFlip(p=0.5), 
+        ])
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.transforms(x)
+
 class MLP(nn.Module):
-    def __init__(self, output_shapes: List[int], dropout_rate: float):
+    def __init__(self, img_size: int, shapes: List[int], dropout_rate: float, do_aug: bool=True, crop_aug_padding: int=4):
         super().__init__()
         items = []
-        for i in range(len(output_shapes)-2):
-            items.append(nn.Linear(output_shapes[i], output_shapes[i+1]))
+        for i in range(len(shapes)-2):
+            items.append(nn.Linear(shapes[i], shapes[i+1]))
             items.append(nn.Dropout(dropout_rate))
             items.append(nn.ReLU())
-        items.append(nn.Linear(output_shapes[-2], output_shapes[-1]))
+        items.append(nn.Linear(shapes[-2], shapes[-1]))
         self.sequence = nn.Sequential(*items)
+        self.augmentations = DataAugmentation(img_size=img_size, padding=crop_aug_padding)
+        self.do_aug = do_aug
     
     def forward(self, x):
         x = x / 255.0
+        if self.training and self.do_aug:
+            x = self.augmentations(x)
         x = x.reshape(x.shape[0], -1)
         return self.sequence(x)
     
@@ -50,7 +64,7 @@ class MLP(nn.Module):
         return loss, logs
 
 class SimpleCNN(nn.Module):
-    def __init__(self, img_size, n_channels, n_labels):
+    def __init__(self, img_size: int, n_channels: int, n_labels: int, do_aug: bool=True, crop_aug_padding: int=4):
         super().__init__()
         self.sequence = nn.Sequential(
             nn.Conv2d(n_channels, 32, kernel_size=(5, 5), stride=1, padding='same'), 
@@ -71,9 +85,13 @@ class SimpleCNN(nn.Module):
             nn.Dropout(p=0.5), 
             nn.Linear(128, n_labels), 
         )
+        self.augmentations = DataAugmentation(img_size=img_size, padding=crop_aug_padding)
+        self.do_aug = do_aug
     
     def forward(self, x):
         x = x / 255.0
+        if self.training and self.do_aug:
+            x = self.augmentations(x)
         return self.sequence(x)
     
     def loss(self, x, y):

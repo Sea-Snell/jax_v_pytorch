@@ -70,20 +70,25 @@ class CIFAR100DataConfig(ConfigScript):
 
 @dataclass
 class MLPConfig(ConfigScriptModel):
+    img_size: int
     shapes: List[int]
     dropout: float
+    do_aug: bool
+    crop_aug_padding: int
 
     def unroll(self, metaconfig: MetaConfig) -> torch.nn.Module:
-        return MLP(self.shapes, self.dropout)
+        return MLP(self.img_size, self.shapes, self.dropout, self.do_aug, self.crop_aug_padding)
 
 @dataclass
 class SimpleCNNConfig(ConfigScriptModel):
     img_size: int
     n_channels: int
     n_labels: int
+    do_aug: bool
+    crop_aug_padding: int
 
     def unroll(self, metaconfig: MetaConfig) -> torch.nn.Module:
-        return SimpleCNN(self.img_size, self.n_channels, self.n_labels)
+        return SimpleCNN(self.img_size, self.n_channels, self.n_labels, self.do_aug, self.crop_aug_padding)
 
 @dataclass
 class AdamWConfig(ConfigScriptOptim):

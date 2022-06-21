@@ -15,8 +15,11 @@ fashion_mnist_train_data = FashionMNISTDataConfig(split='train')
 fashion_mnist_eval_data = FashionMNISTDataConfig(split='test')
 
 mnist_mlp_model = MLPConfig(
+    img_size=28, 
     shapes=[28*28, 128, 128, 10], 
     dropout=0.5, 
+    do_aug=True, 
+    crop_aug_padding=4, 
     checkpoint_path=None, 
     strict_load=True, 
     device=device, 
@@ -26,6 +29,8 @@ mnist_cnn_model = SimpleCNNConfig(
     img_size=28, 
     n_channels=1, 
     n_labels=10, 
+    do_aug=True, 
+    crop_aug_padding=4, 
     checkpoint_path=None, 
     strict_load=True, 
     device=device, 
@@ -37,8 +42,11 @@ cifar10_train_data = CIFAR10DataConfig(split='train')
 cifar10_eval_data = CIFAR10DataConfig(split='test')
 
 cifar10_mlp_model = MLPConfig(
+    img_size=32, 
     shapes=[32*32*3, 128, 128, 10], 
     dropout=0.5, 
+    do_aug=True, 
+    crop_aug_padding=4, 
     checkpoint_path=None, 
     strict_load=True, 
     device=device, 
@@ -48,6 +56,8 @@ cifar10_cnn_model = SimpleCNNConfig(
     img_size=32, 
     n_channels=3, 
     n_labels=10, 
+    do_aug=True, 
+    crop_aug_padding=4, 
     checkpoint_path=None, 
     strict_load=True, 
     device=device, 
@@ -59,8 +69,11 @@ cifar100_train_data = CIFAR100DataConfig(split='train')
 cifar100_eval_data = CIFAR100DataConfig(split='test')
 
 cifar100_mlp_model = MLPConfig(
+    img_size=32, 
     shapes=[32*32*3, 128, 128, 100], 
     dropout=0.5, 
+    do_aug=True, 
+    crop_aug_padding=4, 
     checkpoint_path=None, 
     strict_load=True, 
     device=device, 
@@ -70,6 +83,8 @@ cifar100_cnn_model = SimpleCNNConfig(
     img_size=32, 
     n_channels=3, 
     n_labels=100, 
+    do_aug=True, 
+    crop_aug_padding=4, 
     checkpoint_path=None, 
     strict_load=True, 
     device=device, 

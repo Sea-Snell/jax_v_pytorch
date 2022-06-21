@@ -10,6 +10,7 @@ import numpy as np
 import optax
 from src import MLP, SimpleCNN, ImageData
 import os
+import torchvision
 import torchvision.datasets as datasets
 
 project_root = os.path.dirname(__file__)
@@ -70,12 +71,13 @@ class CIFAR100DataConfig(ConfigScript):
 
 @dataclass
 class MLPConfig(ConfigScriptModel):
-    shapes: List[int]
+    img_shape: Union[List[int], Tuple[int]]
+    out_shapes: List[int]
     dropout: float
 
     def unroll(self, metaconfig: MetaConfig) -> ModelConfigReturn:
-        model = hk.multi_transform_with_state(partial(MLP.multi_transform_f, self.shapes[1:], self.dropout))
-        return ModelConfigReturn(model, (jnp.zeros((1, self.shapes[0],)),), {'train': True})
+        model = hk.multi_transform_with_state(partial(MLP.multi_transform_f, self.out_shapes, self.dropout))
+        return ModelConfigReturn(model, (jnp.zeros((1, *self.img_shape,)),), {'train': True})
 
 @dataclass
 class SimpleCNNConfig(ConfigScriptModel):

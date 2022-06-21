@@ -15,7 +15,8 @@ fashion_mnist_train_data = FashionMNISTDataConfig(split='train')
 fashion_mnist_eval_data = FashionMNISTDataConfig(split='test')
 
 mnist_mlp_model = MLPConfig(
-    shapes=[28*28, 128, 128, 10], 
+    img_shape=(28, 28, 1), 
+    out_shapes=[128, 128, 10], 
     dropout=0.5, 
     rng=seed.split(1), 
     checkpoint_path=None, 
@@ -38,7 +39,8 @@ cifar10_train_data = CIFAR10DataConfig(split='train')
 cifar10_eval_data = CIFAR10DataConfig(split='test')
 
 cifar10_mlp_model = MLPConfig(
-    shapes=[32*32*3, 128, 128, 10], 
+    img_shape=(32, 32, 3), 
+    out_shapes=[128, 128, 10], 
     dropout=0.5, 
     rng=seed.split(3), 
     checkpoint_path=None, 
@@ -61,9 +63,10 @@ cifar100_train_data = CIFAR100DataConfig(split='train')
 cifar100_eval_data = CIFAR100DataConfig(split='test')
 
 cifar100_mlp_model = MLPConfig(
-    shapes=[32*32*3, 128, 128, 100], 
+    img_shape=(32, 32, 3), 
+    out_shapes=[128, 128, 100], 
     dropout=0.5, 
-    rng=seed.split(3), 
+    rng=seed.split(5), 
     checkpoint_path=None, 
     params=None, 
     state=None, 
@@ -72,7 +75,7 @@ cifar100_mlp_model = MLPConfig(
 cifar100_cnn_model = SimpleCNNConfig(
     img_shape=(32, 32, 3), 
     n_labels=100, 
-    rng=seed.split(4), 
+    rng=seed.split(6), 
     checkpoint_path=None, 
     params=None, 
     state=None
@@ -94,11 +97,12 @@ optim = AdamWConfig(
 evaluator = StandardaEvaluator(
     eval_data=eval_data, 
     model=model, 
-    rng=seed.split(5), 
+    rng=seed.split(7), 
     bsize=32, 
     prefetch_batches=None, 
     eval_batches=1, 
     loss_kwargs={}, 
+    jit=True, 
 )
 
 train = TrainLoop(
@@ -106,7 +110,7 @@ train = TrainLoop(
     train_data=train_data, 
     optim=optim, 
     evaluator=evaluator, 
-    rng=seed.split(6), 
+    rng=seed.split(8), 
     save_dir=None, 
     max_checkpoints=1, 
     epochs=10, 
@@ -119,20 +123,20 @@ train = TrainLoop(
     jit=True, 
     use_wandb=False, 
     wandb_project='haiku_mnist_test', 
-    loss_kwargs={}, 
+    loss_kwargs={'do_aug': True, 'crop_aug_padding': 4}, 
 )
 
 if __name__ == "__main__":
     # Train for 10 epochs on every setting of model and dataset. Comment out the ones you don't want to train.
     runs = [
         ('MLP_MNIST', mnist_train_data, mnist_eval_data, mnist_mlp_model), 
-        ('CNN_MNIST', mnist_train_data, mnist_eval_data, mnist_cnn_model), 
-        ('MLP_FashionMNIST', fashion_mnist_train_data, fashion_mnist_eval_data, mnist_mlp_model), 
-        ('CNN_FashionMNIST', fashion_mnist_train_data, fashion_mnist_eval_data, mnist_cnn_model), 
-        ('MLP_CIFAR10', cifar10_train_data, cifar10_eval_data, cifar10_mlp_model), 
-        ('CNN_CIFAR10', cifar10_train_data, cifar10_eval_data, cifar10_cnn_model), 
-        ('MLP_CIFAR100', cifar100_train_data, cifar100_eval_data, cifar100_mlp_model), 
-        ('CNN_CIFAR100', cifar100_train_data, cifar100_eval_data, cifar100_cnn_model), 
+        # ('CNN_MNIST', mnist_train_data, mnist_eval_data, mnist_cnn_model), 
+        # ('MLP_FashionMNIST', fashion_mnist_train_data, fashion_mnist_eval_data, mnist_mlp_model), 
+        # ('CNN_FashionMNIST', fashion_mnist_train_data, fashion_mnist_eval_data, mnist_cnn_model), 
+        # ('MLP_CIFAR10', cifar10_train_data, cifar10_eval_data, cifar10_mlp_model), 
+        # ('CNN_CIFAR10', cifar10_train_data, cifar10_eval_data, cifar10_cnn_model), 
+        # ('MLP_CIFAR100', cifar100_train_data, cifar100_eval_data, cifar100_mlp_model), 
+        # ('CNN_CIFAR100', cifar100_train_data, cifar100_eval_data, cifar100_cnn_model), 
     ]
 
     for name, train_data, eval_data, model in runs:

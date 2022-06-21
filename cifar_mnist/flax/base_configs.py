@@ -68,12 +68,13 @@ class CIFAR100DataConfig(ConfigScript):
 
 @dataclass
 class MLPConfig(ConfigScriptModel):
-    shapes: List[int]
+    img_shape: Union[List[int], Tuple[int]]
+    out_shapes: List[int]
     dropout: float
     
     def unroll(self, metaconfig: MetaConfig) -> ModelConfigReturn:
-        model = MLP(self.shapes[1:], self.dropout)
-        return ModelConfigReturn(model, {'dropout'}, (jnp.zeros((1, self.shapes[0],)),), {'train': True})
+        model = MLP(self.out_shapes, self.dropout)
+        return ModelConfigReturn(model, {'dropout', 'augment'}, (jnp.zeros((1, *self.img_shape,)),), {'train': True})
 
 @dataclass
 class SimpleCNNConfig(ConfigScriptModel):
@@ -82,7 +83,7 @@ class SimpleCNNConfig(ConfigScriptModel):
 
     def unroll(self, metaconfig: MetaConfig) -> ModelConfigReturn:
         model = SimpleCNN(self.n_labels)
-        return ModelConfigReturn(model, {'dropout'}, (jnp.zeros((1, *self.img_shape,)),), {'train': True})
+        return ModelConfigReturn(model, {'dropout', 'augment'}, (jnp.zeros((1, *self.img_shape,)),), {'train': True})
 
 @dataclass
 class AdamWConfig(ConfigScriptOptim):

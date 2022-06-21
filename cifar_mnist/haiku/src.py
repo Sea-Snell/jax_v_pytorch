@@ -21,6 +21,23 @@ class ImageData:
         labels = jax.nn.one_hot(labels, self.n_labels, dtype=jnp.uint8)
         return imgs, labels
 
+def random_crop_augment(rng: jax.random.KeyArray, img: jnp.ndarray, padding: int) -> jnp.ndarray:
+    crop_from = jax.random.randint(rng, (2,), 0, 2 * padding + 1)
+    crop_from = jnp.concatenate((crop_from, jnp.zeros((1,), dtype=jnp.int32),), axis=0)
+    padded_img = jnp.pad(img, ((padding, padding), (padding, padding), (0, 0),), mode='edge')
+    return jax.lax.dynamic_slice(padded_img, crop_from, img.shape)
+
+def random_flip_augment(rng: jax.random.KeyArray, img: jnp.ndarray) -> jnp.ndarray:
+    should_flip = jax.random.bernoulli(rng, 0.5)
+    return jax.lax.cond(should_flip, lambda x: jnp.flip(x, axis=1), lambda x: x, img)
+
+def batched_augmentation(rng: jax.random.KeyArray, imgs: jnp.ndarray, padding: int=4):
+    rng, *new_rngs = jax.random.split(rng, imgs.shape[0]+1)
+    imgs = jax.vmap(random_crop_augment, (0, 0, None,))(jnp.stack(new_rngs, axis=0), imgs, padding)
+    rng, *new_rngs = jax.random.split(rng, imgs.shape[0]+1)
+    imgs = jax.vmap(random_flip_augment, (0, 0,))(jnp.stack(new_rngs, axis=0), imgs)
+    return imgs
+
 MLP_transformed = namedtuple('MLP_transformed', ['forward', 'loss'])
 
 class MLP(hk.Module):
@@ -34,10 +51,11 @@ class MLP(hk.Module):
         model = cls(*args, **kwargs)
         return model.__call__, MLP_transformed(model.__call__, model.loss)
     
-    def __call__(self, x, *, train):
+    def __call__(self, x, *, train: bool, do_aug: bool=True, crop_aug_padding: int=4):
         dropout_rate = self.dropout_rate if train else 0.0
-        
         x = x.astype(jnp.float32) / 255.0
+        if train and do_aug:
+            x = batched_augmentation(hk.next_rng_key(), x, crop_aug_padding)
         x = hk.Flatten()(x)
         for output_shape in self.output_shapes[:-1]:
             x = hk.Linear(output_shape)(x)
@@ -46,9 +64,9 @@ class MLP(hk.Module):
         x = hk.Linear(self.output_shapes[-1])(x)
         return x
     
-    def loss(self, x, y, *, train):
+    def loss(self, x, y, *, train: bool, do_aug: bool=True, crop_aug_padding: int=4):
         y = y.astype(jnp.float32)
-        predictions = self(x, train=train)
+        predictions = self(x, train=train, do_aug=do_aug, crop_aug_padding=crop_aug_padding)
         loss = optax.softmax_cross_entropy(predictions, y).mean()
         logs = {'loss': loss, 'acc': (jnp.argmax(predictions, axis=1) == jnp.argmax(y, axis=1)).mean()}
         return loss, logs
@@ -65,11 +83,13 @@ class SimpleCNN(hk.Module):
         model = cls(*args, **kwargs)
         return model.__call__, SimpleCNN_transformed(model.__call__, model.loss)
     
-    def __call__(self, x, *, train):
+    def __call__(self, x, *, train: bool, do_aug: bool=True, crop_aug_padding: int=4):
         dropout_rate1 = 0.25 if train else 0.0
         dropout_rate2 = 0.5 if train else 0.0
 
         x = x.astype(jnp.float32) / 255.0
+        if train and do_aug:
+            x = batched_augmentation(hk.next_rng_key(), x, crop_aug_padding)
         x = hk.Sequential([
                 hk.Conv2D(32, kernel_shape=(5, 5), stride=1, padding='SAME'), 
                 jax.nn.relu, 
@@ -93,9 +113,9 @@ class SimpleCNN(hk.Module):
         x = hk.Linear(self.n_labels)(x)
         return x
     
-    def loss(self, x, y, *, train):
+    def loss(self, x, y, *, train: bool, do_aug: bool=True, crop_aug_padding: int=4):
         y = y.astype(jnp.float32)
-        predictions = self(x, train=train)
+        predictions = self(x, train=train, do_aug=do_aug, crop_aug_padding=crop_aug_padding)
         loss = optax.softmax_cross_entropy(predictions, y).mean()
         logs = {'loss': loss, 'acc': (jnp.argmax(predictions, axis=1) == jnp.argmax(y, axis=1)).mean()}
         return loss, logs
