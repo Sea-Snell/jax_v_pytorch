@@ -2,10 +2,9 @@ from functools import partial
 from typing import Optional, Dict, Any
 from micro_config import ConfigScript, ConfigScriptNoCache, MetaConfig
 from dataclasses import dataclass, asdict
-from torch.utils.data.dataset import IterableDataset
-from torch.utils.data import DataLoader
 from collections import deque
 import jax
+import numpy as np
 import os
 import pickle as pkl
 import optax
@@ -23,19 +22,22 @@ class StandardaEvaluator(ConfigScriptNoCache):
     rng: ConfigScriptRNG
     bsize: int
     eval_batches: Optional[int]
-    dataloader_workers: int
     loss_kwargs: Dict[str, Any]
 
     def unroll(self, metaconfig: MetaConfig):
 
-        # setup dataloader
+        # get rng
+        rng = self.rng.unroll(metaconfig)
+
+        # setup dataset
         eval_dataset = self.eval_data.unroll(metaconfig)
-        train_data_loader_kwargs = {'num_workers': self.dataloader_workers, 
-                                    'batch_size': self.bsize, 
-                                    'collate_fn': eval_dataset.collate}
-        if not isinstance(eval_dataset, IterableDataset):
-            train_data_loader_kwargs['shuffle'] = True
-        eval_dataloader = DataLoader(eval_dataset, **train_data_loader_kwargs)
+        steps_per_epoch = len(eval_dataset) // self.bsize
+        
+        # get batch indexes
+        rng, new_rng = jax.random.split(rng)
+        permutations = np.asarray(jax.random.permutation(new_rng, len(eval_dataset)))
+        permutations = permutations[:steps_per_epoch * self.bsize]
+        permutations = permutations.reshape(steps_per_epoch, self.bsize)
 
         # load model
         model, params, model_state = self.model.unroll(metaconfig)
@@ -48,10 +50,10 @@ class StandardaEvaluator(ConfigScriptNoCache):
         
         # setup evaluator loop state
         eval_logs = []
-        rng = self.rng.unroll(metaconfig)
 
         # eval on batches
-        for i, items in tqdm(enumerate(eval_dataloader)):
+        for i, idxs in tqdm(enumerate(permutations)):
+            items = eval_dataset[idxs]
             
             # conditionally terminate early
             if self.eval_batches is not None and i >= self.eval_batches:
@@ -82,7 +84,6 @@ class TrainLoop(ConfigScript):
     log_every: int
     eval_every: int
     save_every: Optional[int]
-    dataloader_workers: int
     jit: bool
     use_wandb: bool
     wandb_project: str
@@ -111,14 +112,12 @@ class TrainLoop(ConfigScript):
             fake_jit = chex.fake_jit()
             fake_jit.start()
         
-        # setup dataloader
+        # get rng
+        rng = self.rng.unroll(metaconfig)
+        
+        # setup dataset
         train_dataset = self.train_data.unroll(metaconfig)
-        train_data_loader_kwargs = {'num_workers': self.dataloader_workers, 
-                                    'batch_size': self.bsize, 
-                                    'collate_fn': train_dataset.collate}
-        if not isinstance(train_dataset, IterableDataset):
-            train_data_loader_kwargs['shuffle'] = True
-        train_dataloader = DataLoader(train_dataset, **train_data_loader_kwargs)
+        steps_per_epoch = len(train_dataset) // self.bsize
 
         # setup training objects
         model, params, model_state = self.model.unroll(metaconfig)
@@ -140,12 +139,19 @@ class TrainLoop(ConfigScript):
         train_logs = []
         best_perf = float('inf')
         saved_checkpoints = deque([])
-        rng = self.rng.unroll(metaconfig)
 
         # train loop
         for epoch in tqdm(range(self.epochs)):
-            for items in tqdm(train_dataloader):
-                
+
+            # get batch indexes
+            rng, new_rng = jax.random.split(rng)
+            permutations = np.asarray(jax.random.permutation(new_rng, len(train_dataset)))
+            permutations = permutations[:steps_per_epoch * self.bsize]
+            permutations = permutations.reshape(steps_per_epoch, self.bsize)
+
+            for idxs in tqdm(permutations):
+                items = train_dataset[idxs]
+
                 # step model and accumulate training logs
                 rng, new_rng = jax.random.split(rng)
                 logs, params, model_state, opt_state = step_fn(model, params, model_state, opt_state, new_rng, *items, **self.loss_kwargs)
@@ -206,4 +212,4 @@ class TrainLoop(ConfigScript):
         # undo conditional jit block
         if not self.jit:
             fake_jit.stop()
-                        
+

@@ -1,29 +1,24 @@
 from collections import namedtuple
-from typing import List
+from typing import List, Union
 import jax
 import jax.numpy as jnp
 import haiku as hk
 import numpy as np
 import optax
-from torch.utils.data import Dataset
 from logs import LogTuple
 
-class MNISTData(Dataset):
+class MNISTData:
     def __init__(self, imgs, labels):
-        self.imgs = imgs
+        self.imgs = imgs.reshape(-1, 28*28)
         self.labels = labels
 
     def __len__(self):
         return self.imgs.shape[0]
 
-    def __getitem__(self, idx):
-        return self.imgs[idx], self.labels[idx]
-
-    @staticmethod
-    def collate(items):
-        imgs, labels = zip(*items)
-        imgs, labels = jnp.uint8(np.stack(imgs, axis=0)), jnp.uint8(np.stack(labels, axis=0))
-        imgs, labels = jnp.reshape(imgs, (-1, 28*28)), jax.nn.one_hot(labels, 10)
+    def __getitem__(self, idx: Union[int, np.ndarray]):
+        imgs, labels = self.imgs[idx], self.labels[idx]
+        imgs, labels = jnp.uint8(imgs), jnp.uint8(labels)
+        labels = jax.nn.one_hot(labels, 10, dtype=jnp.uint8)
         return imgs, labels
 
 MLP_transformed = namedtuple('MLP_transformed', ['forward', 'loss'])
@@ -51,6 +46,7 @@ class MLP(hk.Module):
         return x
     
     def loss(self, x, y, *, train):
+        y = y.astype(jnp.float32)
         n = y.shape[0]
         predictions = self(x, train=train)
         loss = optax.softmax_cross_entropy(predictions, y).mean()
@@ -98,6 +94,7 @@ class MNISTCNN(hk.Module):
         return x
     
     def loss(self, x, y, *, train):
+        y = y.astype(jnp.float32)
         n = y.shape[0]
         predictions = self(x, train=train)
         loss = optax.softmax_cross_entropy(predictions, y).mean()

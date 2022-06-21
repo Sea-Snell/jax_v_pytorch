@@ -41,7 +41,6 @@ evaluator = StandardaEvaluator(
     rng=seed.split(3), 
     bsize=32, 
     eval_batches=1, 
-    dataloader_workers=0, 
     loss_kwargs={}, 
 )
 
@@ -59,7 +58,6 @@ train = TrainLoop(
     log_every=4096, 
     eval_every=4096, 
     save_every=None, 
-    dataloader_workers=0, 
     jit=True, 
     use_wandb=False, 
     wandb_project='haiku_mnist_test', 
