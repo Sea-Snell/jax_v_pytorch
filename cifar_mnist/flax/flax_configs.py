@@ -20,9 +20,6 @@ class RNGSeed(ConfigScript):
     
     def split(self, n_splits: int) -> RNGSplit:
         return RNGSplit(self, n_splits)
-    
-    def split(self, n_splits: int) -> RNGSplit:
-        return RNGSplit(self, n_splits)
 
 @dataclass
 class RNGSplit(ConfigScript):
@@ -36,6 +33,9 @@ class RNGSplit(ConfigScript):
         for _ in range(self.n_splits):
             rng, new_rng = jax.random.split(rng)
         return new_rng
+    
+    def split(self, n_splits: int) -> RNGSplit:
+        return RNGSplit(self, n_splits)
 
 ConfigScriptRNG = Union[RNGSeed, RNGSplit]
 
