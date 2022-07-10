@@ -17,6 +17,9 @@ class RNGSeed(ConfigScript):
     
     def split(self, n_splits: int) -> RNGSplit:
         return RNGSplit(self, n_splits)
+    
+    def split(self, n_splits: int) -> RNGSplit:
+        return RNGSplit(self, n_splits)
 
 @dataclass
 class RNGSplit(ConfigScript):
