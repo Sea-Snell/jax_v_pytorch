@@ -1,4 +1,4 @@
-from typing import Union, Any, Dict, List, Tuple, Set, FrozenSet, Iterator
+from typing import Union, Any, Dict, List, Tuple, Set, FrozenSet, Iterator, Optional, Callable
 import itertools
 import jax
 import numpy as np
@@ -25,10 +25,12 @@ def batch_idxs(rng: jax.random.KeyArray, data_size: int, bsize: int) -> np.ndarr
     permutations = permutations.reshape(steps_per_epoch, bsize)
     return permutations
 
-def batch_iterator(rng: jax.random.KeyArray, dataset: Any, bsize: int) -> Iterator:
+def batch_iterator(rng: jax.random.KeyArray, dataset: Any, bsize: int, postproc_f: Optional[Callable]=None) -> Iterator:
+    if postproc_f is None:
+        postproc_f = lambda x: x
     batches = batch_idxs(rng, len(dataset), bsize)
     for idxs in batches:
-        yield dataset[idxs]
+        yield postproc_f(dataset[idxs])
 
 def prefetch(iterator: Iterator, queue_size: int = 2) -> Iterator:
     # See https://flax.readthedocs.io/en/latest/_modules/flax/jax_utils.html#prefetch_to_device
