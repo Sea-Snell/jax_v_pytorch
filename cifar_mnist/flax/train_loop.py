@@ -216,7 +216,7 @@ class TrainLoop(ConfigScript):
                     print('saved.')
 
                 # conditionally terminate
-                if self.max_steps is not None and (step+1) >= self.max_steps:
+                if self.max_steps is not None and (step + 1) >= self.max_steps:
                     return
 
                 step += 1
