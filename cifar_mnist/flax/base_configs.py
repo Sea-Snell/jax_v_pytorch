@@ -74,7 +74,7 @@ class MLPConfig(ConfigScriptModel):
     
     def unroll(self, metaconfig: MetaConfig) -> ModelConfigReturn:
         model = MLP(self.out_shapes, self.dropout)
-        return ModelConfigReturn(model, {'dropout', 'augment'}, (jnp.zeros((1, *self.img_shape,)),), {'train': True})
+        return ModelConfigReturn(model, frozenset({'dropout', 'augment'}), (jnp.zeros((1, *self.img_shape,)),), {'train': True})
 
 @dataclass
 class SimpleCNNConfig(ConfigScriptModel):
@@ -83,7 +83,7 @@ class SimpleCNNConfig(ConfigScriptModel):
 
     def unroll(self, metaconfig: MetaConfig) -> ModelConfigReturn:
         model = SimpleCNN(self.n_labels)
-        return ModelConfigReturn(model, {'dropout', 'augment'}, (jnp.zeros((1, *self.img_shape,)),), {'train': True})
+        return ModelConfigReturn(model, frozenset({'dropout', 'augment'}), (jnp.zeros((1, *self.img_shape,)),), {'train': True})
 
 @dataclass
 class AdamWConfig(ConfigScriptOptim):

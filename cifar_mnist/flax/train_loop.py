@@ -49,8 +49,9 @@ class StandardEvaluator(ConfigScriptNoCache):
         model, variables, rng_keys = self.model.unroll(metaconfig)
 
         # define eval loss
-        @partial(jax.jit, static_argnames=list(self.loss_kwargs.keys()))
-        def eval_loss(variables, rngs, *args, **kwargs):
+        @partial(jax.jit, static_argnums=(2,), static_argnames=list(self.loss_kwargs.keys()))
+        def eval_loss(variables, rng, rng_keys, *args, **kwargs):
+            rngs = rngs_from_keys(rng, rng_keys)
             _, logs = model.apply(variables, *args, method=model.loss, rngs=rngs, 
                                   mutable=False, train=False, **kwargs)
             return logs
@@ -69,8 +70,7 @@ class StandardEvaluator(ConfigScriptNoCache):
 
             # get eval logs
             rng, new_rng = jax.random.split(rng)
-            rngs = rngs_from_keys(new_rng, rng_keys)
-            logs = eval_loss(variables, rngs, *items, **self.loss_kwargs)
+            logs = eval_loss(variables, new_rng, rng_keys, *items, **self.loss_kwargs)
             eval_logs.append(logs)
         
         # gather and postproc eval logs
@@ -140,14 +140,15 @@ class TrainLoop(ConfigScript):
         training_state, model, model_state, rng_keys = self.train_state.unroll(metaconfig)
 
         # define training step
-        @partial(jax.jit, static_argnums=(0,), static_argnames=list(self.loss_kwargs.keys()))
-        def step_fn(loss_fn, training_state, model_state, rngs, *args, **kwargs):
+        @partial(jax.jit, static_argnums=(0,4,), static_argnames=list(self.loss_kwargs.keys()))
+        def step_fn(loss_fn, training_state, model_state, rng, rng_keys, *args, **kwargs):
             def grad_loss(params, model_state, rngs, *args, **kwargs):
                 variables = freeze({'params': params, **model_state})
                 (loss, logs), variables = training_state.apply_fn(variables, *args, rngs=rngs, train=True, 
                                                                   mutable=True, method=loss_fn, **kwargs)
                 model_state, _ = variables.pop('params')
                 return loss, (logs, model_state)
+            rngs = rngs_from_keys(rng, rng_keys)
             (_, (logs, model_state,)), grads = jax.value_and_grad(grad_loss, has_aux=True)(training_state.params, model_state, rngs, *args, **kwargs)
             training_state = training_state.apply_gradients(grads=grads)
             return logs, training_state, model_state
@@ -157,6 +158,7 @@ class TrainLoop(ConfigScript):
         best_perf = float('inf')
         saved_checkpoints = deque([])
         rng = self.rng.unroll(metaconfig)
+        step = 0
 
         # train loop
         for epoch in tqdm(range(self.epochs)):
@@ -165,29 +167,28 @@ class TrainLoop(ConfigScript):
                 
                 # step model and get training logs
                 rng, new_rng = jax.random.split(rng)
-                rngs = rngs_from_keys(new_rng, rng_keys)
-                logs, training_state, model_state = step_fn(model.loss, training_state, model_state, rngs, *items, **self.loss_kwargs)
+                logs, training_state, model_state = step_fn(model.loss, training_state, model_state, new_rng, rng_keys, *items, **self.loss_kwargs)
                 train_logs.append(logs)
                 
                 # publish training logs
-                if (training_state.step + 1) % self.log_every == 0:
+                if (step + 1) % self.log_every == 0:
                     logs = reduce_logs(train_logs)
-                    logs = pool_logs(label_logs(logs, 'train', {'step': training_state.step, 'epoch': epoch}))
+                    logs = pool_logs(label_logs(logs, 'train', {'step': step+1, 'epoch': epoch}))
                     log(logs, self.use_wandb)
                 
                 # clear training logs
-                if (training_state.step + 1) % self.train_state.optim.grad_accum_steps == 0:
+                if (step + 1) % self.train_state.optim.grad_accum_steps == 0:
                     train_logs = []
                 
                 # begin evaluation
-                if (training_state.step + 1) % self.eval_every == 0:
+                if (step + 1) % self.eval_every == 0:
 
                     # get eval logs
                     self.evaluator.model.variables = freeze({'params': training_state.params, **model_state})
                     eval_perf, eval_logs = self.evaluator.unroll(metaconfig)
 
                     # publish eval logs
-                    eval_logs = pool_logs(label_logs(eval_logs, 'eval', {'step': training_state.step, 'epoch': epoch}))
+                    eval_logs = pool_logs(label_logs(eval_logs, 'eval', {'step': step+1, 'epoch': epoch}))
                     log(eval_logs, self.use_wandb)
 
                     # conditionally save best model and optimizer state
@@ -201,7 +202,7 @@ class TrainLoop(ConfigScript):
                         best_perf = eval_perf
                 
                 # periodically save checkpoint
-                if save_dir is not None and self.save_every is not None and (training_state.step + 1) % self.save_every == 0:
+                if save_dir is not None and self.save_every is not None and (step + 1) % self.save_every == 0:
                     print('saving checkpoint...')
 
                     # conditionally delete old checkpoints
@@ -209,14 +210,16 @@ class TrainLoop(ConfigScript):
                         os.system('rm -rf %s' % (saved_checkpoints.popleft()))
                     
                     # save
-                    with open(os.path.join(save_dir, 'model_%d.pkl' % (training_state.step)), 'wb') as f:
+                    with open(os.path.join(save_dir, 'model_%d.pkl' % (step+1)), 'wb') as f:
                         pkl.dump(to_bytes(freeze({'params': training_state.params, **model_state})), f)
-                    saved_checkpoints.append(os.path.join(save_dir, 'model_%d.pkl' % (training_state.step)))
+                    saved_checkpoints.append(os.path.join(save_dir, 'model_%d.pkl' % (step+1)))
                     print('saved.')
 
                 # conditionally terminate
-                if self.max_steps is not None and training_state.step >= self.max_steps:
+                if self.max_steps is not None and (step+1) >= self.max_steps:
                     return
+
+                step += 1
         
         # undo conditional jit block
         if not self.jit:
