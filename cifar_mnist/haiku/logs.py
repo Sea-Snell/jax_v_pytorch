@@ -5,6 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 import wandb
 from functools import reduce
+from jaxtyping import PyTree
 
 LogTuple = namedtuple('LogTuple', ['mean', 'count'])
 
@@ -49,12 +50,12 @@ def combine_elements(a, b):
         return jnp.concatenate((a, b,), axis=0)
     raise NotImplementedError
 
-def reduce_logs(logs: List[jax.tree_util.PyTreeDef], initial_log: Optional[jax.tree_util.PyTreeDef]=None) -> jax.tree_util.PyTreeDef:
+def reduce_logs(logs: List[PyTree], initial_log: Optional[PyTree]=None) -> PyTree:
     if initial_log is None:
         return reduce(combine_elements, logs)
     return reduce(combine_elements, logs, initial_log)
 
-def pool_logs(logs: jax.tree_util.PyTreeDef) -> Any:
+def pool_logs(logs: PyTree) -> Any:
     logs = jax.tree_util.tree_map(reduce_elements, logs, is_leaf=is_leaf)
     logs = jax.device_get(logs)
     logs = un_jax_logs(logs)

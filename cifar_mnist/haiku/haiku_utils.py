@@ -11,13 +11,6 @@ def batch_idxs(rng: jax.random.KeyArray, data_size: int, bsize: int) -> np.ndarr
     permutations = permutations.reshape(steps_per_epoch, bsize)
     return permutations
 
-def split_rng_pytree(rng_pytree: Any, splits: int=2):
-    if len(jax.tree_util.tree_leaves(rng_pytree)) == 0:
-        return tuple([rng_pytree for _ in range(splits)])
-    outer_tree_def = jax.tree_util.tree_structure(rng_pytree)
-    split_rngs = jax.tree_util.tree_map(lambda x: tuple(jax.random.split(x, splits)), rng_pytree)
-    return jax.tree_util.tree_transpose(outer_tree_def, jax.tree_util.tree_structure(tuple([0 for _ in range(splits)])), split_rngs)
-
 def batch_iterator(rng: jax.random.KeyArray, dataset: Any, bsize: int, postproc_f: Optional[Callable]=None) -> Iterator:
     if postproc_f is None:
         postproc_f = lambda x: x

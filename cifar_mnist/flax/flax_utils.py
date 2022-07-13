@@ -3,6 +3,7 @@ import itertools
 import jax
 import numpy as np
 import collections
+from jaxtyping import PyTree
 
 def rngs_from_keys(rng: jax.random.KeyArray, keys: Union[List[str], Set[str], Tuple[str], FrozenSet[str]]) -> Dict[str, jax.random.KeyArray]:
     rngs = {}
@@ -11,7 +12,7 @@ def rngs_from_keys(rng: jax.random.KeyArray, keys: Union[List[str], Set[str], Tu
         rngs[k] = new_rng
     return rngs
 
-def split_rng_pytree(rng_pytree: Any, splits: int=2):
+def split_rng_pytree(rng_pytree: PyTree[jax.random.KeyArray], splits: int=2) -> PyTree[jax.random.KeyArray]:
     if len(jax.tree_util.tree_leaves(rng_pytree)) == 0:
         return tuple([rng_pytree for _ in range(splits)])
     outer_tree_def = jax.tree_util.tree_structure(rng_pytree)
