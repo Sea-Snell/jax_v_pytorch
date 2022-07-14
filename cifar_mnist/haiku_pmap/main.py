@@ -1,6 +1,6 @@
 from base_configs import MNISTDataConfig, FashionMNISTDataConfig, CIFAR10DataConfig, CIFAR100DataConfig, MLPConfig, SimpleCNNConfig, AdamWConfig, project_root
-from flax_configs import RNGSeed, TrainStateConfig
-from train_loop import TrainLoop, StandardEvaluator
+from haiku_configs import RNGSeed
+from train_loop import TrainLoop, StandardaEvaluator
 from micro_config import MetaConfig, deep_replace, parse_args
 from copy import deepcopy
 import jax
@@ -22,7 +22,8 @@ mnist_mlp_model = MLPConfig(
     dropout=0.5, 
     rng=seed.split(1), 
     checkpoint_path=None, 
-    variables=None, 
+    params=None, 
+    state=None, 
 )
 
 mnist_cnn_model = SimpleCNNConfig(
@@ -30,7 +31,8 @@ mnist_cnn_model = SimpleCNNConfig(
     n_labels=10, 
     rng=seed.split(2), 
     checkpoint_path=None, 
-    variables=None, 
+    params=None, 
+    state=None
 )
 
 # CIFAR 10 models and data
@@ -44,7 +46,8 @@ cifar10_mlp_model = MLPConfig(
     dropout=0.5, 
     rng=seed.split(3), 
     checkpoint_path=None, 
-    variables=None, 
+    params=None, 
+    state=None, 
 )
 
 cifar10_cnn_model = SimpleCNNConfig(
@@ -52,7 +55,8 @@ cifar10_cnn_model = SimpleCNNConfig(
     n_labels=10, 
     rng=seed.split(4), 
     checkpoint_path=None, 
-    variables=None, 
+    params=None, 
+    state=None
 )
 
 # CIFAR 100 models and data
@@ -66,7 +70,8 @@ cifar100_mlp_model = MLPConfig(
     dropout=0.5, 
     rng=seed.split(5), 
     checkpoint_path=None, 
-    variables=None, 
+    params=None, 
+    state=None, 
 )
 
 cifar100_cnn_model = SimpleCNNConfig(
@@ -74,7 +79,8 @@ cifar100_cnn_model = SimpleCNNConfig(
     n_labels=100, 
     rng=seed.split(6), 
     checkpoint_path=None, 
-    variables=None, 
+    params=None, 
+    state=None
 )
 
 # opimizer, evaluator, training loop
@@ -90,12 +96,7 @@ optim = AdamWConfig(
     optim_state=None, 
 )
 
-train_state = TrainStateConfig(
-    model=model, 
-    optim=optim, 
-)
-
-evaluator = StandardEvaluator(
+evaluator = StandardaEvaluator(
     eval_data=eval_data, 
     model=model, 
     rng=seed.split(7), 
@@ -108,8 +109,9 @@ evaluator = StandardEvaluator(
 )
 
 train = TrainLoop(
+    model=model, 
     train_data=train_data, 
-    train_state=train_state, 
+    optim=optim, 
     evaluator=evaluator, 
     rng=seed.split(8), 
     save_dir=None, 
@@ -123,7 +125,7 @@ train = TrainLoop(
     save_every=None, 
     jit=True, 
     use_wandb=False, 
-    wandb_project='flax_mnist_test', 
+    wandb_project='haiku_mnist_test', 
     loss_kwargs={'do_aug': True, 'crop_aug_padding': 4}, 
 )
 
@@ -150,8 +152,8 @@ if __name__ == "__main__":
         )
 
         curr_train = deepcopy(train)
-        curr_train = deep_replace(curr_train, train_data=train_data, 
-                                  train_state={'model': model, 'optim': {'model': model}}, 
+        curr_train = deep_replace(curr_train, model=model, 
+                                  train_data=train_data, optim={'model': model}, 
                                   evaluator={'model': model, 'eval_data': eval_data})
         curr_train = deep_replace(curr_train, **parse_args())
         curr_train.unroll(metaconfig)

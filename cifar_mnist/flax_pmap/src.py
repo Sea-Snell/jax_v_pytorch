@@ -18,7 +18,6 @@ class ImageData:
     def __getitem__(self, idx: Union[int, np.ndarray]) -> Tuple[u8, u8]:
         imgs, labels = self.imgs[idx], self.labels[idx]
         imgs, labels = jnp.uint8(imgs), jnp.uint8(labels)
-        labels = jax.nn.one_hot(labels, self.n_labels, dtype=jnp.uint8)
         return imgs, labels
 
 def random_crop_augment(rng: jax.random.KeyArray, img: f32["h w d"], padding: int) -> f32["h w d"]:
@@ -58,11 +57,10 @@ class MLP(nn.Module):
         x = self.linears[-1](x)
         return x
     
-    def loss(self, x: u8['b h w d'], y: u8['b label'], *, train: bool, do_aug: bool=True, crop_aug_padding: int=4) -> Tuple[f32, PyTree]:
-        y = y.astype(jnp.float32)
+    def loss(self, x: u8['b h w d'], y: u8['b'], *, train: bool, do_aug: bool=True, crop_aug_padding: int=4) -> Tuple[f32, PyTree]:
         predictions = self(x, train=train, do_aug=do_aug, crop_aug_padding=crop_aug_padding)
-        loss = optax.softmax_cross_entropy(predictions, y).mean()
-        logs = {'loss': loss, 'acc': (jnp.argmax(predictions, axis=1) == jnp.argmax(y, axis=1)).mean()}
+        loss = optax.softmax_cross_entropy_with_integer_labels(predictions, y).mean()
+        logs = {'loss': loss, 'acc': (jnp.argmax(predictions, axis=1) == y).mean()}
         return loss, logs
 
 class SimpleCNN(nn.Module):
@@ -104,9 +102,8 @@ class SimpleCNN(nn.Module):
         x = self.linear2(x)
         return x
     
-    def loss(self, x: u8['b h w d'], y: u8['b label'], *, train: bool, do_aug: bool=True, crop_aug_padding: int=4) -> Tuple[f32, PyTree]:
-        y = y.astype(jnp.float32)
+    def loss(self, x: u8['b h w d'], y: u8['b'], *, train: bool, do_aug: bool=True, crop_aug_padding: int=4) -> Tuple[f32, PyTree]:
         predictions = self(x, train=train, do_aug=do_aug, crop_aug_padding=crop_aug_padding)
-        loss = optax.softmax_cross_entropy(predictions, y).mean()
-        logs = {'loss': loss, 'acc': (jnp.argmax(predictions, axis=1) == jnp.argmax(y, axis=1)).mean()}
+        loss = optax.softmax_cross_entropy_with_integer_labels(predictions, y).mean()
+        logs = {'loss': loss, 'acc': (jnp.argmax(predictions, axis=1) ==y).mean()}
         return loss, logs

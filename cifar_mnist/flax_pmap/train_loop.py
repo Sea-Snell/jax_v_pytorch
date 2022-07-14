@@ -33,7 +33,8 @@ class StandardEvaluator(ConfigScriptNoCache):
 
     def unroll(self, metaconfig: MetaConfig):
         devices = jax.local_devices()
-        assert self.bsize % len(devices) == 0, 'batch size must be divisible by number of devices'
+        n_devices = len(devices)
+        assert self.bsize % n_devices == 0, 'batch size must be divisible by number of devices'
 
         # conditionally block jit
         if not self.jit:
@@ -78,9 +79,9 @@ class StandardEvaluator(ConfigScriptNoCache):
                 break
 
             # shard data, get eval logs
-            rng, *new_rng = jax.random.split(rng, len(devices)+1)
+            rng, *new_rng = jax.random.split(rng, n_devices+1)
             new_rng = jax.device_put_sharded(new_rng, devices)
-            items = jax.tree_util.tree_map(lambda x: x.reshape(len(devices), x.shape[0] // len(devices), *x.shape[1:]), items)
+            items = jax.tree_util.tree_map(lambda x: x.reshape(n_devices, x.shape[0] // n_devices, *x.shape[1:]), items)
             logs = eval_loss(variables, new_rng, rng_keys, items, loss_kwargs)
             eval_logs.append(logs)
         
@@ -116,8 +117,9 @@ class TrainLoop(ConfigScript):
     def unroll(self, metaconfig: MetaConfig):
         print('using config:', asdict(self))
         devices = jax.local_devices()
-        assert self.bsize % len(devices) == 0, 'batch size must be divisible by number of devices'
-        print('using devices:', devices)
+        n_devices = len(devices)
+        assert self.bsize % n_devices == 0, 'batch size must be divisible by number of devices'
+        print('using %d devices:' % (n_devices), devices)
         
         # save configs
         save_dir = metaconfig.convert_path(self.save_dir)
@@ -149,7 +151,7 @@ class TrainLoop(ConfigScript):
                 iterator = prefetch(iterator, self.prefetch_batches)
             return iterator
 
-        # setup training objects
+        # setup training objects, replicate params
         training_state, model, model_state, rng_keys = self.train_state.unroll(metaconfig)
         model_state = jax.device_put_replicated(model_state, devices)
         training_state = jax.device_put_replicated(training_state, devices)
@@ -185,9 +187,9 @@ class TrainLoop(ConfigScript):
             for items in tqdm(dataloader(new_rng), total=(len(train_dataset) // self.bsize)):
                 
                 # step model, shard data, and get training logs
-                rng, *new_rng = jax.random.split(rng, len(devices)+1)
+                rng, *new_rng = jax.random.split(rng, n_devices+1)
                 new_rng = jax.device_put_sharded(new_rng, devices)
-                items = jax.tree_util.tree_map(lambda x: x.reshape(len(devices), x.shape[0] // len(devices), *x.shape[1:]), items)
+                items = jax.tree_util.tree_map(lambda x: x.reshape(n_devices, x.shape[0] // n_devices, *x.shape[1:]), items)
                 logs, training_state, model_state = step_fn(model.loss, training_state, model_state, new_rng, rng_keys, items, loss_kwargs)
                 train_logs.append(logs)
                 

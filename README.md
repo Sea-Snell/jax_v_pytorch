@@ -69,3 +69,4 @@ All implementations are meant to be identical modulo framework specific differen
     * `flax/` implemented in flax, single device
     * `flax_pmap/` implemented in flax, multi device
     * `haiku/` implemented in haiku, single device
+    * `haiku_pmap/` implemented in haiku, multi device

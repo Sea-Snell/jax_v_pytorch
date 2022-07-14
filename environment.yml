@@ -8,14 +8,15 @@ dependencies:
 - pip:
   - dm-haiku==0.0.6
   - flax==0.5.1
-  - optax==0.1.2
+  - optax==0.1.3
   - chex==0.1.3
   - torch==1.11
   - torchvision==0.12
   - kornia==0.6.5
-  - micro-config==0.1.2
+  - micro-config==0.1.3
   - tqdm==4.64.0
   - wandb==0.12.18
   - dm-tree==0.1.7
   - jaxtyping==0.0.2
+  - frozendict==2.3.2
   - "jax[cpu]"

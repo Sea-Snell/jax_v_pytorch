@@ -15,6 +15,14 @@ import wandb
 from haiku_configs import ConfigScriptModel, ConfigScriptOptim, ConfigScriptRNG
 import json
 from haiku_utils import batch_iterator, prefetch
+from frozendict import frozendict
+
+def unreplicate(tree):
+  """
+    Returns a single instance of a replicated array.
+    source: https://flax.readthedocs.io/en/latest/_modules/flax/jax_utils.html#unreplicate
+  """
+  return jax.tree_map(lambda x: x[0], tree)
 
 @dataclass
 class StandardaEvaluator(ConfigScriptNoCache):
@@ -26,8 +34,12 @@ class StandardaEvaluator(ConfigScriptNoCache):
     eval_batches: Optional[int]
     loss_kwargs: Dict[str, Any]
     jit: bool
+    sharded_model: bool
 
     def unroll(self, metaconfig: MetaConfig):
+        devices = jax.local_devices()
+        n_devices = len(devices)
+        assert self.bsize % n_devices == 0, 'batch size must be divisible by number of devices'
 
         # conditionally block jit
         if not self.jit:
@@ -47,11 +59,15 @@ class StandardaEvaluator(ConfigScriptNoCache):
 
         # load model
         model, params, model_state = self.model.unroll(metaconfig)
+        if not self.sharded_model:
+            params = jax.device_put_replicated(params, devices)
+            model_state = jax.device_put_replicated(model_state, devices)
 
         # define eval loss
-        @partial(jax.jit, static_argnums=(0,), static_argnames=list(self.loss_kwargs.keys()))
-        def eval_loss(model, params, model_state, rng, *args, **kwargs):
-            (_, logs,), _ = model.apply.loss(params, model_state, rng, *args, train=False, **kwargs)
+        loss_kwargs = frozendict(self.loss_kwargs)
+        @partial(jax.pmap, static_broadcasted_argnums=(0,5,), axis_name='data_local_device', devices=devices)
+        def eval_loss(model, params, model_state, rng, loss_args, loss_kwargs):
+            (_, logs,), _ = model.apply.loss(params, model_state, rng, *loss_args, train=False, **loss_kwargs)
             return logs
         
         # setup evaluator loop state
@@ -65,9 +81,11 @@ class StandardaEvaluator(ConfigScriptNoCache):
             if self.eval_batches is not None and i >= self.eval_batches:
                 break
 
-            # get eval logs
-            rng, new_rng = jax.random.split(rng)
-            logs = eval_loss(model, params, model_state, new_rng, *items, **self.loss_kwargs)
+            # shard data, get eval logs
+            rng, *new_rng = jax.random.split(rng, n_devices+1)
+            new_rng = jax.device_put_sharded(new_rng, devices)
+            items = jax.tree_util.tree_map(lambda x: x.reshape(n_devices, x.shape[0] // n_devices, *x.shape[1:]), items)
+            logs = eval_loss(model, params, model_state, new_rng, items, loss_kwargs)
             eval_logs.append(logs)
         
         # gather and postproc eval logs
@@ -102,7 +120,10 @@ class TrainLoop(ConfigScript):
 
     def unroll(self, metaconfig: MetaConfig):
         print('using config:', asdict(self))
-        print('using device:', jax.devices()[0])
+        devices = jax.local_devices()
+        n_devices = len(devices)
+        assert self.bsize % n_devices == 0, 'batch size must be divisible by number of devices'
+        print('using %d devices:' % (n_devices), devices)
         
         # save configs
         save_dir = metaconfig.convert_path(self.save_dir)
@@ -134,17 +155,21 @@ class TrainLoop(ConfigScript):
                 iterator = prefetch(iterator, self.prefetch_batches)
             return iterator
 
-        # setup training objects
+        # setup training objects, replicate params
         model, params, model_state = self.model.unroll(metaconfig)
         optim, opt_state = self.optim.unroll(metaconfig)
+        params, model_state = jax.device_put_replicated(params, devices), jax.device_put_replicated(model_state, devices)
+        opt_state = jax.device_put_replicated(opt_state, devices)
 
         # define training step
-        @partial(jax.jit, static_argnums=(0,1,), static_argnames=list(self.loss_kwargs.keys()))
-        def step_fn(model, optim, params, model_state, opt_state, rng, *args, **kwargs):
-            def grad_loss(params, model_state, rng, *args, **kwargs):
-                (loss, logs), model_state = model.apply.loss(params, model_state, rng, *args, **kwargs)
+        loss_kwargs = frozendict(self.loss_kwargs)
+        @partial(jax.pmap, static_broadcasted_argnums=(0,1,7,), axis_name='data_local_device', devices=devices)
+        def step_fn(model, optim, params, model_state, opt_state, rng, loss_args, loss_kwargs):
+            def grad_loss(params, model_state, rng, *loss_args, **loss_kwargs):
+                (loss, logs), model_state = model.apply.loss(params, model_state, rng, *loss_args, **loss_kwargs)
                 return loss, (logs, model_state,)
-            (_, (logs, model_state,)), grads = jax.value_and_grad(grad_loss, has_aux=True)(params, model_state, rng, *args, train=True, **kwargs)
+            (_, (logs, model_state,)), grads = jax.value_and_grad(grad_loss, has_aux=True)(params, model_state, rng, *loss_args, train=True, **loss_kwargs)
+            grads = jax.lax.pmean(grads, axis_name='data_local_device')
             updates, opt_state = optim.update(grads, opt_state, params=params)
             params = optax.apply_updates(params, updates)
             return logs, params, model_state, opt_state
@@ -155,15 +180,17 @@ class TrainLoop(ConfigScript):
         best_perf = float('inf')
         saved_checkpoints = deque([])
         evaluator = deepcopy(self.evaluator)
+        assert evaluator.sharded_model, 'evaluator must allow sharded model'
 
         # train loop
         for epoch in tqdm(range(self.epochs)):
             rng, new_rng = jax.random.split(rng)
             for items in tqdm(dataloader(new_rng), total=(len(train_dataset) // self.bsize)):
-
-                # step model and get training logs
-                rng, new_rng = jax.random.split(rng)
-                logs, params, model_state, opt_state = step_fn(model, optim, params, model_state, opt_state, new_rng, *items, **self.loss_kwargs)
+                # step model, shard data, and get training logs
+                rng, *new_rng = jax.random.split(rng, n_devices+1)
+                new_rng = jax.device_put_sharded(new_rng, devices)
+                items = jax.tree_util.tree_map(lambda x: x.reshape(n_devices, x.shape[0] // n_devices, *x.shape[1:]), items)
+                logs, params, model_state, opt_state = step_fn(model, optim, params, model_state, opt_state, new_rng, items, loss_kwargs)
                 train_logs.append(logs)
                 
                 # publish training logs
@@ -191,9 +218,9 @@ class TrainLoop(ConfigScript):
                     if save_dir is not None and eval_perf < best_perf:
                         print('new best eval loss! Saving ...')
                         with open(os.path.join(save_dir, 'model.pkl'), 'wb') as f:
-                            pkl.dump((params, model_state,), f)
+                            pkl.dump(unreplicate((params, model_state,)), f)
                         with open(os.path.join(save_dir, 'optim.pkl'), 'wb') as f:
-                            pkl.dump(opt_state, f)
+                            pkl.dump(unreplicate(opt_state), f)
                         print('saved.')
                         best_perf = eval_perf
                 
@@ -207,7 +234,7 @@ class TrainLoop(ConfigScript):
                     
                     # save
                     with open(os.path.join(save_dir, 'model_%d.pkl' % (step)), 'wb') as f:
-                        pkl.dump((params, model_state,), f)
+                        pkl.dump(unreplicate((params, model_state,)), f)
                     saved_checkpoints.append(os.path.join(save_dir, 'model_%d.pkl' % (step)))
                     print('saved.')
                 
