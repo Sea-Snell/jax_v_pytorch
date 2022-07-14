@@ -1,3 +1,4 @@
+from copy import deepcopy
 from functools import partial
 from typing import Optional, Dict, Any
 from micro_config import ConfigScript, ConfigScriptNoCache, MetaConfig
@@ -153,6 +154,7 @@ class TrainLoop(ConfigScript):
         train_logs = []
         best_perf = float('inf')
         saved_checkpoints = deque([])
+        evaluator = deepcopy(self.evaluator)
 
         # train loop
         for epoch in tqdm(range(self.epochs)):
@@ -178,8 +180,8 @@ class TrainLoop(ConfigScript):
                 if (step + 1) % self.eval_every == 0:
 
                     # get eval logs
-                    self.evaluator.model.params, self.evaluator.model.state = params, model_state
-                    eval_perf, eval_logs = self.evaluator.unroll(metaconfig)
+                    evaluator.model.params, evaluator.model.state = params, model_state
+                    eval_perf, eval_logs = evaluator.unroll(metaconfig)
 
                     # publish eval logs
                     eval_logs = pool_logs(label_logs(eval_logs, 'eval', {'step': step, 'epoch': epoch}))
