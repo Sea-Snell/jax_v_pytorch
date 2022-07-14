@@ -64,7 +64,8 @@ Feel free to edit any configs in `main.py`. You can do this by either directly e
 
 All implementations are meant to be identical modulo framework specific differences.
 
-* `cifar_mnist/` implements MNIST/FashionMNIST/CIFAR10/CIFAR100 training
-    * `pytorch/` implemented in pytorch
-    * `flax/` implemented in flax
-    * `haiku/` implemented in haiku
+* `cifar_mnist/` implements MNIST/FashionMNIST/CIFAR10/CIFAR100 training on both single and multiple devices (data parallel).
+    * `pytorch/` implemented in pytorch, single device
+    * `flax/` implemented in flax, single device
+    * `flax_pmap/` implemented in flax, multi device
+    * `haiku/` implemented in haiku, single device
