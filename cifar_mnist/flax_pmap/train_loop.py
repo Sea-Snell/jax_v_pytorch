@@ -58,7 +58,7 @@ class StandardEvaluator(ConfigScriptNoCache):
 
         # define eval loss
         loss_kwargs = freeze(self.loss_kwargs)
-        @partial(jax.pmap, static_broadcasted_argnums=(2,4,), axis_name='data_local_device')
+        @partial(jax.pmap, static_broadcasted_argnums=(2,4,), axis_name='data_local_device', devices=devices)
         def eval_loss(variables, rng, rng_keys, loss_args, loss_kwargs):
             rngs = rngs_from_keys(rng, rng_keys)
             _, logs = model.apply(variables, *loss_args, method=model.loss, rngs=rngs, 
@@ -156,7 +156,7 @@ class TrainLoop(ConfigScript):
 
         # define training step
         loss_kwargs = freeze(self.loss_kwargs)
-        @partial(jax.pmap, static_broadcasted_argnums=(0, 4, 6), axis_name='data_local_device')
+        @partial(jax.pmap, static_broadcasted_argnums=(0, 4, 6), axis_name='data_local_device', devices=devices)
         def step_fn(loss_fn, training_state, model_state, rng, rng_keys, loss_args, loss_kwargs):
             def grad_loss(params, model_state, rngs, *args, **loss_kwargs):
                 variables = freeze({'params': params, **model_state})
