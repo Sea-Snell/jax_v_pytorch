@@ -61,8 +61,8 @@ def combine_elements(a, b):
 
 def reduce_logs(logs: List[PyTree], initial_log: Optional[PyTree]=None) -> PyTree:
     if initial_log is None:
-        return reduce(combine_elements, logs)
-    return reduce(combine_elements, logs, initial_log)
+        return tree.map_structure(lambda *x: reduce(combine_elements, x), *logs)
+    return tree.map_structure(lambda *x: reduce(combine_elements, x, initial_log), *logs)
 
 def pool_logs(logs: PyTree) -> Any:
     logs = tree.map_structure(reduce_elements, logs)
