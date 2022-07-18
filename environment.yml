@@ -24,4 +24,5 @@ dependencies:
   - transformers==4.20.1
   - six==1.16.0
   - pyyaml==6.0
+  - sentencepiece==0.1.96
   - "jax[cpu]"
