@@ -93,7 +93,7 @@ class LMInferenceT5(ConfigScript):
         )
 
         # mesh definition
-        mesh_devices = np.array(jax.devices()).reshape(1, jax.local_device_count())
+        mesh_devices = np.array(jax.devices()).reshape(1, jax.devices())
 
         # actually initialize the params
         with Mesh(mesh_devices, ("dp", "mp")):
