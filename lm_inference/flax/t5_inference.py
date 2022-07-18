@@ -43,7 +43,6 @@ def _get_partition_rules_t5():
         # embeddings
         (("shared", "embedding"), P("mp", None)),
         (("relative_attention_bias", "embedding"), None), 
-        (("relative_attention_bias", "kernel"), None), 
         # self atention
         (("SelfAttention", "(k|q|v)", "kernel"), P(None, "mp")),
         (("SelfAttention", "o", "kernel"), P("mp", None)),
