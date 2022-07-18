@@ -1,6 +1,6 @@
 # jax_v_pytorch
 
-Side-by-side implementations of two different jax frameworks ([haiku](https://dm-haiku.readthedocs.io/en/latest/) and [flax](https://flax.readthedocs.io/en/latest/overview.html)) and [pytorch](https://pytorch.org) on simple deep learning training and inference tasks. Currently implements MNIST, FashionMNIST, CIFAR10, and CIFAR100 training on MLPs and CNNs.
+Side-by-side implementations of two different jax frameworks ([haiku](https://dm-haiku.readthedocs.io/en/latest/) and [flax](https://flax.readthedocs.io/en/latest/overview.html)) and [pytorch](https://pytorch.org) on simple deep learning training and inference tasks. Currently implements MNIST, FashionMNIST, CIFAR10, and CIFAR100 training on MLPs and CNNs, and mult-host model parallel LLM inference for all OPT, T5, T5v1.1, UL2, GPT2, and GPTJ models.
 
 ## installation
 
@@ -69,3 +69,5 @@ All implementations are meant to be identical modulo framework specific differen
     * `flax_pmap/` implemented in flax, multi device
     * `haiku/` implemented in haiku, single device
     * `haiku_pmap/` implemented in haiku, multi device
+* `lm_inference/` implements model-parallel, multi-host LLM inference for all OPT, T5, T5v1.1, UL2, GPT2, and GPTJ models.
+    * `flax/` implemented in flax with Transformers, multi device, multi host
