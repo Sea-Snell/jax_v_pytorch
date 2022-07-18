@@ -2,7 +2,7 @@ from typing import Optional
 import jax
 from jax.experimental.pjit import pjit
 import jax.numpy as jnp
-from transformers import FlaxGPT2LMHeadModel, GPT2Tokenizer, GPT2Config
+from transformers import GPT2Tokenizer, FlaxOPTForCausalLM, OPTConfig
 from micro_config import ConfigScript, MetaConfig
 from dataclasses import dataclass
 from flax.traverse_util import flatten_dict, unflatten_dict
@@ -12,42 +12,36 @@ import numpy as np
 from jax.experimental.maps import Mesh
 from jax.experimental import PartitionSpec as P
 
-# PartitionSpec for GPT2
+# PartitionSpec for OPT
 # replicate the hidden dim and shard feed-forward and head dim
-def _get_partition_rules_gpt2():
+def _get_partition_rules_opt():
     return [
         # embeddings
-        (("transformer", "wpe", "embedding"), P("mp", None)),
-        (("transformer", "wte", "embedding"), P("mp", None)),
+        (("model", "decoder", "embed_positions", "embedding"), P("mp", None)),
+        (("model", "decoder", "embed_tokens", "embedding"), P("mp", None)),
+        (("model", "decoder", "project_in", "kernel"), None), 
+        (("model", "decoder", "project_out", "kernel"), None), 
         # atention
-        (("attn", "(q_attn|c_attn)", "kernel"), P(None, "mp")),
-        (("attn", "(q_attn|c_attn)", "bias"), P("mp")),
-        (("attn", "c_proj", "kernel"), P("mp", None)),
-        (("attn", "c_proj", "bias"), None),
+        (("self_attn", "(k_proj|q_proj|v_proj)", "kernel"), P(None, "mp")),
+        (("self_attn", "(k_proj|q_proj|v_proj)", "bias"), P("mp")),
+        (("self_attn", "out_proj", "kernel"), P("mp", None)),
+        (("self_attn", "out_proj", "bias"), P(None)),
         # mlp
-        (("mlp", "c_fc", "kernel"), P(None, "mp")),
-        (("mlp", "c_fc", "bias"), P("mp")),
-        (("mlp", "c_proj", "kernel"), P("mp", None)),
-        (("mlp", "c_proj", "bias"), None),
+        (("fc1", "kernel"), P(None, "mp")),
+        (("fc1", "bias"), P("mp")),
+        (("fc2", "kernel"), P("mp", None)),
+        (("fc2", "bias"), None),
         # layer norms
-        ((r"ln_\d+", "bias"), None),
-        ((r"\d+", r"ln_\d+", "scale"), None),
-        (("ln_f", "bias"), None),
-        (("ln_f", "scale"), None),
+        (("final_layer_norm", "bias"), None),
+        (("final_layer_norm", "scale"), None),
+        (("self_attn_layer_norm", "bias"), None),
+        (("self_attn_layer_norm", "scale"), None),
+        # output head
+        (("model", "lm_head", "kernel"), P(None, "mp")), 
     ]
 
-# Source: https://github.com/huggingface/transformers/tree/main/examples/research_projects/jax-projects/model_parallel
-def load_gpt2(model_str, **kwargs):
-    model, params = FlaxGPT2LMHeadModel.from_pretrained(model_str, _do_init=False, **kwargs)
-    emb = jnp.zeros((50264, model.config.hidden_size))
-    emb = emb.at[:50257, :].set(params["transformer"]["wte"]["embedding"])
-    params["transformer"]["wte"]["embedding"] = emb
-    config = GPT2Config.from_pretrained(model_str, vocab_size=50264, **kwargs)
-    model = FlaxGPT2LMHeadModel(config, _do_init=False)
-    return model, freeze(params)
-
 @dataclass
-class LMInferenceGPT2(ConfigScript):
+class LMInferenceOPT(ConfigScript):
     model_str: str
     max_len: Optional[int]
     seed: int
@@ -57,11 +51,11 @@ class LMInferenceGPT2(ConfigScript):
     def unroll(self, metaconfig: MetaConfig):
         rng = jax.random.PRNGKey(self.seed)
         tokenizer = GPT2Tokenizer.from_pretrained(self.model_str)
-        tokenizer.pad_token = tokenizer.eos_token
         with jax.default_device(jax.devices('cpu')[0]):
-            model, params = load_gpt2(self.model_str, pad_token_id=tokenizer.eos_token_id, dtype=jnp.bfloat16)
+            model, params = FlaxOPTForCausalLM.from_pretrained(self.model_str, _do_init=False, dtype=jnp.bfloat16)
+            params = freeze(params)
         params = model.to_bf16(params)
-        param_spec = set_partitions(unfreeze(params), _get_partition_rules_gpt2())
+        param_spec = set_partitions(unfreeze(params), _get_partition_rules_opt())
 
         p_get_initial_params = pjit(
             _id_fn, 

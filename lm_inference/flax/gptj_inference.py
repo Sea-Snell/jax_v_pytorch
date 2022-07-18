@@ -2,7 +2,7 @@ from typing import Optional
 import jax
 from jax.experimental.pjit import pjit
 import jax.numpy as jnp
-from transformers import FlaxGPT2LMHeadModel, GPT2Tokenizer, GPT2Config
+from transformers import FlaxGPTJForCausalLM, AutoTokenizer, GPTJConfig
 from micro_config import ConfigScript, MetaConfig
 from dataclasses import dataclass
 from flax.traverse_util import flatten_dict, unflatten_dict
@@ -12,42 +12,32 @@ import numpy as np
 from jax.experimental.maps import Mesh
 from jax.experimental import PartitionSpec as P
 
-# PartitionSpec for GPT2
+# PartitionSpec for GPTJ
 # replicate the hidden dim and shard feed-forward and head dim
-def _get_partition_rules_gpt2():
+def _get_partition_rules_gptj():
     return [
         # embeddings
-        (("transformer", "wpe", "embedding"), P("mp", None)),
         (("transformer", "wte", "embedding"), P("mp", None)),
         # atention
-        (("attn", "(q_attn|c_attn)", "kernel"), P(None, "mp")),
-        (("attn", "(q_attn|c_attn)", "bias"), P("mp")),
-        (("attn", "c_proj", "kernel"), P("mp", None)),
-        (("attn", "c_proj", "bias"), None),
+        (("attn", "(k_proj|q_proj|v_proj)", "kernel"), P(None, "mp")),
+        (("attn", "out_proj", "kernel"), P("mp", None)),
         # mlp
-        (("mlp", "c_fc", "kernel"), P(None, "mp")),
-        (("mlp", "c_fc", "bias"), P("mp")),
-        (("mlp", "c_proj", "kernel"), P("mp", None)),
-        (("mlp", "c_proj", "bias"), None),
+        (("mlp", "fc_in", "kernel"), P(None, "mp")),
+        (("mlp", "fc_in", "bias"), P("mp")),
+        (("mlp", "fc_out", "kernel"), P("mp", None)),
+        (("mlp", "fc_out", "bias"), None),
         # layer norms
         ((r"ln_\d+", "bias"), None),
         ((r"\d+", r"ln_\d+", "scale"), None),
         (("ln_f", "bias"), None),
         (("ln_f", "scale"), None),
+        # output head
+        (("lm_head", "kernel"), P(None, "mp")), 
+        (("lm_head", "bias"), P("mp")), 
     ]
 
-# Source: https://github.com/huggingface/transformers/tree/main/examples/research_projects/jax-projects/model_parallel
-def load_gpt2(model_str, **kwargs):
-    model, params = FlaxGPT2LMHeadModel.from_pretrained(model_str, _do_init=False, **kwargs)
-    emb = jnp.zeros((50264, model.config.hidden_size))
-    emb = emb.at[:50257, :].set(params["transformer"]["wte"]["embedding"])
-    params["transformer"]["wte"]["embedding"] = emb
-    config = GPT2Config.from_pretrained(model_str, vocab_size=50264, **kwargs)
-    model = FlaxGPT2LMHeadModel(config, _do_init=False)
-    return model, freeze(params)
-
 @dataclass
-class LMInferenceGPT2(ConfigScript):
+class LMInferenceGPTJ(ConfigScript):
     model_str: str
     max_len: Optional[int]
     seed: int
@@ -56,12 +46,13 @@ class LMInferenceGPT2(ConfigScript):
 
     def unroll(self, metaconfig: MetaConfig):
         rng = jax.random.PRNGKey(self.seed)
-        tokenizer = GPT2Tokenizer.from_pretrained(self.model_str)
+        tokenizer = AutoTokenizer.from_pretrained(self.model_str)
         tokenizer.pad_token = tokenizer.eos_token
         with jax.default_device(jax.devices('cpu')[0]):
-            model, params = load_gpt2(self.model_str, pad_token_id=tokenizer.eos_token_id, dtype=jnp.bfloat16)
+            model, params = FlaxGPTJForCausalLM.from_pretrained(self.model_str, _do_init=False, pad_token_id=tokenizer.eos_token_id, dtype=jnp.bfloat16)
+            params = freeze(params)
         params = model.to_bf16(params)
-        param_spec = set_partitions(unfreeze(params), _get_partition_rules_gpt2())
+        param_spec = set_partitions(unfreeze(params), _get_partition_rules_gptj())
 
         p_get_initial_params = pjit(
             _id_fn, 

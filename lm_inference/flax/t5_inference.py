@@ -2,7 +2,7 @@ from typing import Optional
 import jax
 from jax.experimental.pjit import pjit
 import jax.numpy as jnp
-from transformers import FlaxT5ForConditionalGeneration, T5Config, T5Tokenizer
+from transformers import FlaxT5ForConditionalGeneration, T5Config, AutoTokenizer, T5ForConditionalGeneration
 from micro_config import ConfigScript, MetaConfig
 from dataclasses import dataclass
 from flax.traverse_util import flatten_dict, unflatten_dict
@@ -11,6 +11,8 @@ from load_model_utils import set_partitions, _id_fn
 import numpy as np
 from jax.experimental.maps import Mesh
 from jax.experimental import PartitionSpec as P
+from transformers.modeling_flax_pytorch_utils import convert_pytorch_state_dict_to_flax
+import torch
 
 # PartitionSpec for T5v1.1
 # replicate the hidden dim and shard feed-forward and head dim
@@ -59,14 +61,23 @@ def _get_partition_rules_t5():
         (("lm_head", "kernel"), P(None, "mp")), 
     ]
 
-def load_t5(model_str, **kwargs):
-    try:
-        model, params = FlaxT5ForConditionalGeneration.from_pretrained(model_str, _do_init=False, **kwargs)
-    except:
-        model = FlaxT5ForConditionalGeneration.from_pretrained(model_str, _do_init=True, from_pt=True, **kwargs)
-        params = model.params
-        config = T5Config.from_pretrained(model_str, **kwargs)
-        model = FlaxT5ForConditionalGeneration(config, _do_init=False)
+def load_t5(model_str, dtype=jnp.float32, **kwargs):
+    if model_str == 'google/ul2':
+        torch_dtype = torch.float32
+        if dtype == jnp.bfloat16:
+            torch_dtype = torch.bfloat16
+        pytorch_model = T5ForConditionalGeneration.from_pretrained("google/ul2", torch_dtype=torch_dtype, **kwargs)
+        config = T5Config.from_pretrained("google/ul2", dtype=dtype, **kwargs)
+        model = FlaxT5ForConditionalGeneration(config, dtype=dtype, **kwargs)
+        params = convert_pytorch_state_dict_to_flax(pytorch_model.state_dict(), model)
+    else:
+        try:
+            model, params = FlaxT5ForConditionalGeneration.from_pretrained(model_str, _do_init=False, **kwargs)
+        except:
+            model = FlaxT5ForConditionalGeneration.from_pretrained(model_str, _do_init=True, from_pt=True, **kwargs)
+            params = model.params
+            config = T5Config.from_pretrained(model_str, **kwargs)
+            model = FlaxT5ForConditionalGeneration(config, _do_init=False)
     return model, freeze(params)
 
 @dataclass
@@ -79,7 +90,7 @@ class LMInferenceT5(ConfigScript):
 
     def unroll(self, metaconfig: MetaConfig):
         rng = jax.random.PRNGKey(self.seed)
-        tokenizer = T5Tokenizer.from_pretrained(self.model_str)
+        tokenizer = AutoTokenizer.from_pretrained(self.model_str)
         with jax.default_device(jax.devices('cpu')[0]):
             model, params = load_t5(self.model_str, dtype=jnp.bfloat16)
         params = model.to_bf16(params)
@@ -88,7 +99,7 @@ class LMInferenceT5(ConfigScript):
 
         p_get_initial_params = pjit(
             _id_fn, 
-            in_axis_resources=None,
+            in_axis_resources=(param_spec, None), 
             out_axis_resources=(param_spec, None), 
         )
 
