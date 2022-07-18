@@ -16,7 +16,7 @@ gptj_model = GPTJModelConfigScript(
 )
 
 opt_model = OPTModelConfigScript(
-    model_str="facebook/opt-66b", 
+    model_str="facebook/opt-13b", 
     use_fp16=True, 
 )
 
@@ -27,14 +27,14 @@ t5_model = T5ModelConfigScript(
     use_fp16=True, 
 )
 
-pretrained_model = opt_model
+pretrained_model = t5_model
 
 lm_inference = LMInferenceConfigScript(
     pretrained_model=pretrained_model, 
     max_len=128, 
     seed=2, 
     n_inferences=25, 
-    prompt='hi my friend!', 
+    prompt='[S2S] hi my friend! <extra_id_0>', 
     # prompt='translate English to German: The house is wonderful.', 
 )
 
