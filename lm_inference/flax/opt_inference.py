@@ -42,7 +42,7 @@ def _get_partition_rules_opt():
 
 def load_opt(model_str, dtype=jnp.float32, **kwargs):
     model, params = FlaxOPTForCausalLM.from_pretrained(model_str, _do_init=False, dtype=dtype, **kwargs)
-    pos_emb = params['model']['decoder']['embed_positions']['embedding'].at[:2048, :]
+    pos_emb = params['model']['decoder']['embed_positions']['embedding'][:2048, :]
     params['model']['decoder']['embed_positions']['embedding'] = pos_emb
     config = OPTConfig.from_pretrained(model_str, dtype=dtype, **kwargs)
     model = FlaxOPTForCausalLM(config, _do_init=False, dtype=dtype)
