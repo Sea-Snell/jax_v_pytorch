@@ -22,8 +22,10 @@ class LMInferenceConfigScript(ConfigScript):
     def unroll(self, metaconfig: MetaConfig):
         rng = jax.random.PRNGKey(self.seed)
         model, params, tokenizer, rules = self.pretrained_model.unroll(metaconfig)
+        # specifies how to split model parameters beteen devices
         param_spec = set_partitions(unfreeze(params), rules)
 
+        # initialization function for splitting parameters to devices
         p_get_initial_params = pjit(
             _id_fn, 
             in_axis_resources=(param_spec, None), 
@@ -35,13 +37,14 @@ class LMInferenceConfigScript(ConfigScript):
         print('using mesh shape:', mesh_devices.shape)
         print('full mesh:', mesh_devices)
 
-        # actually initialize the params
+        # split the params between all devices
         with Mesh(mesh_devices, ("dp", "mp")):
             params, _ = p_get_initial_params(freeze(params), jnp.ones((), dtype=jnp.uint32))
 
         def generate_fn(tokens, params, rng, max_len):
             return model.generate(tokens, max_length=max_len, do_sample=True, prng_key=rng, params=params).sequences[0]
 
+        # model parallel inference function
         p_generate_fn = pjit(
             generate_fn, 
             in_axis_resources=(None, param_spec, None), 
@@ -49,8 +52,10 @@ class LMInferenceConfigScript(ConfigScript):
             static_argnums=(3,), 
         )
 
+        # get input tokens
         tokens = jnp.array(tokenizer(self.prompt)['input_ids'], dtype=jnp.int32)
 
+        # generate sequences
         with Mesh(mesh_devices, ("dp", "mp")):
             for _ in range(self.n_inferences):
                 rng, new_rng = jax.random.split(rng)
