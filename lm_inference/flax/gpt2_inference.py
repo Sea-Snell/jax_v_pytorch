@@ -70,7 +70,9 @@ class LMInferenceGPT2(ConfigScript):
         )
 
         # mesh definition
-        mesh_devices = np.array(jax.devices()).reshape(1, jax.local_device_count())
+        mesh_devices = np.array(jax.devices()).reshape(1, jax.device_count())
+        print('using mesh shape:', mesh_devices.shape)
+        print('full mesh:', mesh_devices)
 
         # actually initialize the opt_state
         with Mesh(mesh_devices, ("dp", "mp")):
