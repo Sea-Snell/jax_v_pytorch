@@ -55,6 +55,7 @@ def set_partitions(in_dict, rules):
     replace = _replacement_rules(rules)
     initd = {k: _unmatched for k in flatten_dict(in_dict)}
     result = {k: replace(k, v) for k, v in initd.items()}
+    print({k for k, v in result.items() if v is _unmatched})
     assert _unmatched not in result.values(), "Incomplete partition spec."
     return freeze(unflatten_dict(result))
 

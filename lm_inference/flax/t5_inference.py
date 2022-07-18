@@ -63,21 +63,18 @@ def _get_partition_rules_t5():
 
 def load_t5(model_str, dtype=jnp.float32, **kwargs):
     if model_str == 'google/ul2':
-        torch_dtype = torch.float32
-        if dtype == jnp.bfloat16:
-            torch_dtype = torch.bfloat16
-        pytorch_model = T5ForConditionalGeneration.from_pretrained("google/ul2", torch_dtype=torch_dtype, **kwargs)
+        pytorch_model = T5ForConditionalGeneration.from_pretrained("google/ul2", **kwargs)
         config = T5Config.from_pretrained("google/ul2", dtype=dtype, **kwargs)
         model = FlaxT5ForConditionalGeneration(config, dtype=dtype, **kwargs)
         params = convert_pytorch_state_dict_to_flax(pytorch_model.state_dict(), model)
     else:
         try:
-            model, params = FlaxT5ForConditionalGeneration.from_pretrained(model_str, _do_init=False, **kwargs)
+            model, params = FlaxT5ForConditionalGeneration.from_pretrained(model_str, _do_init=False, dtype=dtype, **kwargs)
         except:
-            model = FlaxT5ForConditionalGeneration.from_pretrained(model_str, _do_init=True, from_pt=True, **kwargs)
+            model = FlaxT5ForConditionalGeneration.from_pretrained(model_str, _do_init=True, from_pt=True, dtype=dtype, **kwargs)
             params = model.params
-            config = T5Config.from_pretrained(model_str, **kwargs)
-            model = FlaxT5ForConditionalGeneration(config, _do_init=False)
+            config = T5Config.from_pretrained(model_str, dtype=dtype, **kwargs)
+            model = FlaxT5ForConditionalGeneration(config, _do_init=False, dtype=dtype)
     return model, freeze(params)
 
 @dataclass
@@ -94,8 +91,12 @@ class LMInferenceT5(ConfigScript):
         with jax.default_device(jax.devices('cpu')[0]):
             model, params = load_t5(self.model_str, dtype=jnp.bfloat16)
         params = model.to_bf16(params)
-        param_spec = set_partitions(unfreeze(params), 
-                                    _get_partition_rules_t5_v1_1() if 'v1_1' in self.model_str else _get_partition_rules_t5())
+        if 'v1_1' in self.model_str or self.model_str == 'google/ul2':
+            rules = _get_partition_rules_t5_v1_1()
+        else:
+            rules = _get_partition_rules_t5()
+
+        param_spec = set_partitions(unfreeze(params), rules)
 
         p_get_initial_params = pjit(
             _id_fn, 

@@ -37,13 +37,13 @@ def _get_partition_rules_gpt2():
     ]
 
 # Source: https://github.com/huggingface/transformers/tree/main/examples/research_projects/jax-projects/model_parallel
-def load_gpt2(model_str, **kwargs):
-    model, params = FlaxGPT2LMHeadModel.from_pretrained(model_str, _do_init=False, **kwargs)
+def load_gpt2(model_str, dtype=jnp.float32, **kwargs):
+    model, params = FlaxGPT2LMHeadModel.from_pretrained(model_str, _do_init=False, dtype=dtype, **kwargs)
     emb = jnp.zeros((50264, model.config.hidden_size))
     emb = emb.at[:50257, :].set(params["transformer"]["wte"]["embedding"])
     params["transformer"]["wte"]["embedding"] = emb
-    config = GPT2Config.from_pretrained(model_str, vocab_size=50264, **kwargs)
-    model = FlaxGPT2LMHeadModel(config, _do_init=False)
+    config = GPT2Config.from_pretrained(model_str, vocab_size=50264, dtype=dtype, **kwargs)
+    model = FlaxGPT2LMHeadModel(config, _do_init=False, dtype=dtype)
     return model, freeze(params)
 
 @dataclass

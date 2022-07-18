@@ -40,6 +40,14 @@ def _get_partition_rules_opt():
         (("model", "lm_head", "kernel"), P(None, "mp")), 
     ]
 
+def load_opt(model_str, dtype=jnp.float32, **kwargs):
+    model, params = FlaxOPTForCausalLM.from_pretrained(model_str, _do_init=False, dtype=dtype, **kwargs)
+    pos_emb = params['model']['decoder']['embed_positions']['embedding'].at[:2048, :]
+    params['model']['decoder']['embed_positions']['embedding'] = pos_emb
+    config = OPTConfig.from_pretrained(model_str, dtype=dtype, **kwargs)
+    model = FlaxOPTForCausalLM(config, _do_init=False, dtype=dtype)
+    return model, freeze(params)
+
 @dataclass
 class LMInferenceOPT(ConfigScript):
     model_str: str
@@ -52,8 +60,7 @@ class LMInferenceOPT(ConfigScript):
         rng = jax.random.PRNGKey(self.seed)
         tokenizer = GPT2Tokenizer.from_pretrained(self.model_str)
         with jax.default_device(jax.devices('cpu')[0]):
-            model, params = FlaxOPTForCausalLM.from_pretrained(self.model_str, _do_init=False, dtype=jnp.bfloat16)
-            params = freeze(params)
+            model, params = load_opt(self.model_str, dtype=jnp.bfloat16)
         params = model.to_bf16(params)
         param_spec = set_partitions(unfreeze(params), _get_partition_rules_opt())
 

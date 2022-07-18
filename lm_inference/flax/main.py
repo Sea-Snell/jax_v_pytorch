@@ -43,5 +43,5 @@ if __name__ == "__main__":
     metaconfig = MetaConfig(
         verbose=False, 
     )
-    inference = deep_replace(opt_inference, **parse_args())
+    inference = deep_replace(t5_inference, **parse_args())
     inference.unroll(metaconfig)
