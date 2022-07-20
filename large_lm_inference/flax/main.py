@@ -6,7 +6,7 @@ from opt_config import OPTModelConfigScript
 from t5_config import T5ModelConfigScript
 
 gpt2_model = GPT2ModelConfigScript(
-    model_str="gpt2-xlarge", 
+    model_str="gpt2", 
     use_fp16=True, 
 )
 
