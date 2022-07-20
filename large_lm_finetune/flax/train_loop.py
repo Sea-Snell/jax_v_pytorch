@@ -377,6 +377,7 @@ class TrainLoop(ConfigScript):
                         logs = reduce_logs(train_logs)
                         logs = pool_logs(label_logs(logs, 'train', {'step': step+1, 'epoch': epoch}))
                         # if jax.process_index() == 0:
+                        print(logs)
                         if True:
                             log(logs, self.use_wandb)
                     
