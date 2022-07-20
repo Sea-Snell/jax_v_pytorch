@@ -251,6 +251,7 @@ class TrainLoop(ConfigScript):
         # split the opt_state and params between all devices
         with Mesh(mesh_devices, ("dp", "mp")):
             opt_state, params = p_get_initial_state(params)
+        print(jax.tree_util.tree_map(lambda x: x.shape, params))
         
         # define lm training step
         def lm_step_fn(params: PyTree, opt_state: PyTree, rng: jax.random.PRNGKey, batch: FrozenDict):
@@ -320,7 +321,8 @@ class TrainLoop(ConfigScript):
                     if (step + 1) % self.log_every == 0:
                         logs = reduce_logs(train_logs)
                         logs = pool_logs(label_logs(logs, 'train', {'step': step+1, 'epoch': epoch}))
-                        log(logs, self.use_wandb)
+                        if jax.process_index() == 0:
+                            log(logs, self.use_wandb)
                     
                     # clear training logs
                     if (step + 1) % self.optim.grad_accum_steps == 0:
@@ -335,18 +337,20 @@ class TrainLoop(ConfigScript):
 
                         # publish eval logs
                         eval_logs = pool_logs(label_logs(eval_logs, 'eval', {'step': step+1, 'epoch': epoch}))
-                        log(eval_logs, self.use_wandb)
+                        if jax.process_index() == 0:
+                            log(eval_logs, self.use_wandb)
 
                         # conditionally save best model and optimizer state
                         if save_dir is not None and eval_perf < best_perf:
-                            print('new best model! Saving ...')
-                            model_dir = os.path.join(save_dir, 'model')
-                            model.save_pretrained(
-                                model_dir, 
-                                params=params, 
-                            )
-                            print('saved.')
-                            best_perf = eval_perf
+                            if jax.process_index() == 0:
+                                print('new best model! Saving ...')
+                                model_dir = os.path.join(save_dir, 'model')
+                                model.save_pretrained(
+                                    model_dir, 
+                                    params=params, 
+                                )
+                                print('saved.')
+                                best_perf = eval_perf
                     
                     # periodically save checkpoint
                     if save_dir is not None and self.save_every is not None and (step + 1) % self.save_every == 0:
