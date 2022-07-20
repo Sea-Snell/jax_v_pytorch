@@ -249,7 +249,7 @@ class TrainLoop(ConfigScript):
         p_get_initial_state = pjit(
             get_params,
             in_axis_resources=(None,), 
-            out_axis_resources=(param_spec,), 
+            out_axis_resources=param_spec, 
         )
 
         # mesh definition
