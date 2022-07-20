@@ -40,7 +40,7 @@ class LMInferenceConfigScript(ConfigScript):
         # split the params between all devices
         with Mesh(mesh_devices, ("dp", "mp")):
             params, _ = p_get_initial_params(freeze(params), jnp.ones((), dtype=jnp.uint32))
-
+        
         def generate_fn(tokens, params, rng, max_len):
             return model.generate(tokens, max_length=max_len, do_sample=True, prng_key=rng, params=params).sequences[0]
 
@@ -59,6 +59,7 @@ class LMInferenceConfigScript(ConfigScript):
         with Mesh(mesh_devices, ("dp", "mp")):
             for _ in range(self.n_inferences):
                 rng, new_rng = jax.random.split(rng)
+                tokens = jnp.array(tokenizer(self.prompt)['input_ids'], dtype=jnp.int32)
                 generation = p_generate_fn(tokens[None], params, new_rng, self.max_len)
                 print('='*25)
                 print('input:')
@@ -68,3 +69,4 @@ class LMInferenceConfigScript(ConfigScript):
                 print(tokenizer.decode(generation))
                 print('='*25)
                 print()
+                self.prompt += ' hi !!!'
