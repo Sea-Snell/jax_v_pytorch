@@ -242,6 +242,15 @@ class TrainLoop(ConfigScript):
             )
         else:
             p_get_initial_state = get_initial_state
+        
+        def get_params(rng):
+            return model.init_weights(rng, (1, 1,))
+        
+        p_get_initial_state = pjit(
+            get_params,
+            in_axis_resources=(None,), 
+            out_axis_resources=(param_spec,), 
+        )
 
         # mesh definition
         mesh_devices = np.array(jax.devices()).reshape(1, jax.device_count())
@@ -250,127 +259,128 @@ class TrainLoop(ConfigScript):
 
         # split the opt_state and params between all devices
         with Mesh(mesh_devices, ("dp", "mp")):
-            opt_state, params = p_get_initial_state(params)
+            # opt_state, params = p_get_initial_state(params)
+            params = p_get_initial_state(params)
         print(jax.tree_util.tree_map(lambda x: list(map(lambda y: y.shape, x.device_buffers)), params))
         
-        # define lm training step
-        def lm_step_fn(params: PyTree, opt_state: PyTree, rng: jax.random.PRNGKey, batch: FrozenDict):
-            batch = batch.unfreeze()
-            attn_mask = (batch['input_ids'] != pad_id).astype(jnp.int32)
-            batch['attention_mask'], batch['position_ids'] = attn_mask, position_ids
-            def grad_loss(params: PyTree):
-                logits = model(**batch, params=params, dropout_rng=rng, train=True).logits
-                loss, logs = model_loss(logits[:, :-1, :], batch['input_ids'][:, 1:], attn_mask[:, :-1])
-                return loss, logs
-            (_, logs), grads = jax.value_and_grad(grad_loss, has_aux=True)(params)
-            updates, opt_state = optim.update(grads, opt_state, params)
-            params = optax.apply_updates(params, updates)
-            return logs, params, opt_state
+        # # define lm training step
+        # def lm_step_fn(params: PyTree, opt_state: PyTree, rng: jax.random.PRNGKey, batch: FrozenDict):
+        #     batch = batch.unfreeze()
+        #     attn_mask = (batch['input_ids'] != pad_id).astype(jnp.int32)
+        #     batch['attention_mask'], batch['position_ids'] = attn_mask, position_ids
+        #     def grad_loss(params: PyTree):
+        #         logits = model(**batch, params=params, dropout_rng=rng, train=True).logits
+        #         loss, logs = model_loss(logits[:, :-1, :], batch['input_ids'][:, 1:], attn_mask[:, :-1])
+        #         return loss, logs
+        #     (_, logs), grads = jax.value_and_grad(grad_loss, has_aux=True)(params)
+        #     updates, opt_state = optim.update(grads, opt_state, params)
+        #     params = optax.apply_updates(params, updates)
+        #     return logs, params, opt_state
         
-        # define seq2seq training step
-        def t5_step_fn(params: PyTree, opt_state: PyTree, rng: jax.random.PRNGKey, batch: FrozenDict):
-            batch = batch.unfreeze()
-            attn_mask = (batch['input_ids'] != pad_id).astype(jnp.int32)
-            batch['attention_mask'] = attn_mask
-            decoder_attn_mask = (batch['decoder_input_ids'] != pad_id).astype(jnp.int32)
-            batch['decoder_attention_mask'] = decoder_attn_mask
-            def grad_loss(params: PyTree):
-                logits = model(**batch, params=params, dropout_rng=rng, train=True).logits
-                loss, logs = model_loss(logits[:, :-1, :], batch['decoder_input_ids'][:, 1:], decoder_attn_mask[:, :-1])
-                return loss, logs
-            (_, logs), grads = jax.value_and_grad(grad_loss, has_aux=True)(params)
-            updates, opt_state = optim.update(grads, opt_state, params)
-            params = optax.apply_updates(params, updates)
-            return logs, params, opt_state
+        # # define seq2seq training step
+        # def t5_step_fn(params: PyTree, opt_state: PyTree, rng: jax.random.PRNGKey, batch: FrozenDict):
+        #     batch = batch.unfreeze()
+        #     attn_mask = (batch['input_ids'] != pad_id).astype(jnp.int32)
+        #     batch['attention_mask'] = attn_mask
+        #     decoder_attn_mask = (batch['decoder_input_ids'] != pad_id).astype(jnp.int32)
+        #     batch['decoder_attention_mask'] = decoder_attn_mask
+        #     def grad_loss(params: PyTree):
+        #         logits = model(**batch, params=params, dropout_rng=rng, train=True).logits
+        #         loss, logs = model_loss(logits[:, :-1, :], batch['decoder_input_ids'][:, 1:], decoder_attn_mask[:, :-1])
+        #         return loss, logs
+        #     (_, logs), grads = jax.value_and_grad(grad_loss, has_aux=True)(params)
+        #     updates, opt_state = optim.update(grads, opt_state, params)
+        #     params = optax.apply_updates(params, updates)
+        #     return logs, params, opt_state
         
-        if not model.config.is_encoder_decoder:
-            step_fn = lm_step_fn
-        else:
-            step_fn = t5_step_fn
+        # if not model.config.is_encoder_decoder:
+        #     step_fn = lm_step_fn
+        # else:
+        #     step_fn = t5_step_fn
 
-        if self.pjit:
-            p_step_fn = pjit(
-                step_fn, 
-                in_axis_resources=(param_spec, opt_state_spec, None, None), 
-                out_axis_resources=(None, param_spec, opt_state_spec), 
-                donate_argnums=(0, 1), 
-            )
-        else:
-            p_step_fn = step_fn
+        # if self.pjit:
+        #     p_step_fn = pjit(
+        #         step_fn, 
+        #         in_axis_resources=(param_spec, opt_state_spec, None, None), 
+        #         out_axis_resources=(None, param_spec, opt_state_spec), 
+        #         donate_argnums=(0, 1), 
+        #     )
+        # else:
+        #     p_step_fn = step_fn
 
-        # initalize training loop state
-        train_logs = []
-        best_perf = float('inf')
-        saved_checkpoints = deque([])
-        rng = self.rng.unroll(metaconfig)
-        step = 0
-        evaluator = deepcopy(self.evaluator)
+        # # initalize training loop state
+        # train_logs = []
+        # best_perf = float('inf')
+        # saved_checkpoints = deque([])
+        # rng = self.rng.unroll(metaconfig)
+        # step = 0
+        # evaluator = deepcopy(self.evaluator)
 
-        # train loop
-        with Mesh(mesh_devices, ("dp", "mp")):
-            for epoch in tqdm(range(self.epochs)):
-                rng, new_rng = jax.random.split(rng)
-                for items in tqdm(dataloader(new_rng), total=(len(train_dataset) // self.bsize)):
+        # # train loop
+        # with Mesh(mesh_devices, ("dp", "mp")):
+        #     for epoch in tqdm(range(self.epochs)):
+        #         rng, new_rng = jax.random.split(rng)
+        #         for items in tqdm(dataloader(new_rng), total=(len(train_dataset) // self.bsize)):
                     
-                    # step model and get training logs
-                    rng, new_rng = jax.random.split(rng)
-                    logs, params, opt_state = p_step_fn(params, opt_state, new_rng, items)
-                    train_logs.append(logs)
+        #             # step model and get training logs
+        #             rng, new_rng = jax.random.split(rng)
+        #             logs, params, opt_state = p_step_fn(params, opt_state, new_rng, items)
+        #             train_logs.append(logs)
                     
-                    # publish training logs
-                    if (step + 1) % self.log_every == 0:
-                        logs = reduce_logs(train_logs)
-                        logs = pool_logs(label_logs(logs, 'train', {'step': step+1, 'epoch': epoch}))
-                        if jax.process_index() == 0:
-                            log(logs, self.use_wandb)
+        #             # publish training logs
+        #             if (step + 1) % self.log_every == 0:
+        #                 logs = reduce_logs(train_logs)
+        #                 logs = pool_logs(label_logs(logs, 'train', {'step': step+1, 'epoch': epoch}))
+        #                 if jax.process_index() == 0:
+        #                     log(logs, self.use_wandb)
                     
-                    # clear training logs
-                    if (step + 1) % self.optim.grad_accum_steps == 0:
-                        train_logs = []
+        #             # clear training logs
+        #             if (step + 1) % self.optim.grad_accum_steps == 0:
+        #                 train_logs = []
                     
-                    # begin evaluation
-                    if (step + 1) % self.eval_every == 0:
+        #             # begin evaluation
+        #             if (step + 1) % self.eval_every == 0:
 
-                        # get eval logs
-                        evaluator.model.params = params
-                        eval_perf, eval_logs = evaluator.unroll(metaconfig)
+        #                 # get eval logs
+        #                 evaluator.model.params = params
+        #                 eval_perf, eval_logs = evaluator.unroll(metaconfig)
 
-                        # publish eval logs
-                        eval_logs = pool_logs(label_logs(eval_logs, 'eval', {'step': step+1, 'epoch': epoch}))
-                        if jax.process_index() == 0:
-                            log(eval_logs, self.use_wandb)
+        #                 # publish eval logs
+        #                 eval_logs = pool_logs(label_logs(eval_logs, 'eval', {'step': step+1, 'epoch': epoch}))
+        #                 if jax.process_index() == 0:
+        #                     log(eval_logs, self.use_wandb)
 
-                        # conditionally save best model and optimizer state
-                        if save_dir is not None and eval_perf < best_perf:
-                            if jax.process_index() == 0:
-                                print('new best model! Saving ...')
-                                model_dir = os.path.join(save_dir, 'model')
-                                model.save_pretrained(
-                                    model_dir, 
-                                    params=params, 
-                                )
-                                print('saved.')
-                                best_perf = eval_perf
+        #                 # conditionally save best model and optimizer state
+        #                 if save_dir is not None and eval_perf < best_perf:
+        #                     if jax.process_index() == 0:
+        #                         print('new best model! Saving ...')
+        #                         model_dir = os.path.join(save_dir, 'model')
+        #                         model.save_pretrained(
+        #                             model_dir, 
+        #                             params=params, 
+        #                         )
+        #                         print('saved.')
+        #                         best_perf = eval_perf
                     
-                    # periodically save checkpoint
-                    if save_dir is not None and self.save_every is not None and (step + 1) % self.save_every == 0:
-                        if jax.process_index() == 0:
-                            print('saving checkpoint...')
+        #             # periodically save checkpoint
+        #             if save_dir is not None and self.save_every is not None and (step + 1) % self.save_every == 0:
+        #                 if jax.process_index() == 0:
+        #                     print('saving checkpoint...')
 
-                            # conditionally delete old checkpoints
-                            if (self.max_steps is not None) and (len(saved_checkpoints) >= self.max_steps):
-                                os.system('rm -rf %s' % (saved_checkpoints.popleft()))
+        #                     # conditionally delete old checkpoints
+        #                     if (self.max_steps is not None) and (len(saved_checkpoints) >= self.max_steps):
+        #                         os.system('rm -rf %s' % (saved_checkpoints.popleft()))
 
-                            model_dir = os.path.join(save_dir, 'model_%d' % (step+1))
-                            model.save_pretrained(
-                                model_dir, 
-                                params=params, 
-                            )
-                            saved_checkpoints.append(model_dir)
-                        print('saved.')
+        #                     model_dir = os.path.join(save_dir, 'model_%d' % (step+1))
+        #                     model.save_pretrained(
+        #                         model_dir, 
+        #                         params=params, 
+        #                     )
+        #                     saved_checkpoints.append(model_dir)
+        #                 print('saved.')
 
-                    # conditionally terminate
-                    if self.max_steps is not None and (step + 1) >= self.max_steps:
-                        return
+        #             # conditionally terminate
+        #             if self.max_steps is not None and (step + 1) >= self.max_steps:
+        #                 return
 
-                    step += 1
+        #             step += 1
