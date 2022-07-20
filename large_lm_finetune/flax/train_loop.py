@@ -195,7 +195,7 @@ class TrainLoop(ConfigScript):
             position_ids = jnp.broadcast_to(jnp.arange(self.max_len)[None, :], (self.bsize, self.max_len))
         pad_id = jnp.asarray(tokenizer.pad_token_id, dtype=jnp.int32)
 
-        print(jax.tree_util.tree_map(lambda x: list(map(lambda y: y.shape, x.device_buffers)), params))
+        print(jax.tree_util.tree_map(lambda x: x.shape, params))
 
         # Shard params and optimizer state onto devices
         # Source: https://github.com/huggingface/transformers/blob/main/examples/research_projects/jax-projects/model_parallel/run_clm_mp.py
