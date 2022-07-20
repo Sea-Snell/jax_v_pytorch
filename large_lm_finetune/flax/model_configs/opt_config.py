@@ -5,7 +5,7 @@ from micro_config import ConfigScript, MetaConfig
 from dataclasses import dataclass
 from flax.traverse_util import flatten_dict, unflatten_dict
 from flax.core.frozen_dict import unfreeze, freeze
-from .hf_model import PretrainedHFPjitModelConfig
+from .hf_model import PretrainedHFPjitModelConfig, HFPjitModelResult
 from jax.experimental import PartitionSpec as P
 from transformers.modeling_flax_pytorch_utils import convert_pytorch_state_dict_to_flax
 
@@ -64,4 +64,4 @@ class OPTModelConfigScript(PretrainedHFPjitModelConfig):
             model, params = load_opt(self.model_str, dtype=dtype)
             params = self.params_to_dtype(model, params)
         rules = _get_partition_rules_opt()
-        return model, params, tokenizer, rules
+        return HFPjitModelResult(model, params, tokenizer, rules)

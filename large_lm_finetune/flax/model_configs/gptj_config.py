@@ -4,7 +4,7 @@ from micro_config import ConfigScript, MetaConfig
 from dataclasses import dataclass
 from flax.traverse_util import flatten_dict, unflatten_dict
 from flax.core.frozen_dict import unfreeze, freeze
-from .hf_model import PretrainedHFPjitModelConfig
+from .hf_model import PretrainedHFPjitModelConfig, HFPjitModelResult
 from jax.experimental.maps import Mesh
 from jax.experimental import PartitionSpec as P
 
@@ -43,4 +43,4 @@ class GPTJModelConfigScript(PretrainedHFPjitModelConfig):
             params = freeze(params)
             params = self.params_to_dtype(model, params)
         rules = _get_partition_rules_gptj()
-        return model, params, tokenizer, rules
+        return HFPjitModelResult(model, params, tokenizer, rules)

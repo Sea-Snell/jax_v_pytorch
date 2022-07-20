@@ -31,7 +31,8 @@ pretrained_model = t5_model
 
 lm_inference = LMInferenceConfigScript(
     pretrained_model=pretrained_model, 
-    max_len=128, 
+    max_prompt_len=128, 
+    max_len=256, 
     seed=2, 
     n_inferences=25, 
     # prompt='[S2S] hi my friend! <extra_id_0>', 

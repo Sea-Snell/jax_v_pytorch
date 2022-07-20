@@ -1,3 +1,4 @@
+from math import trunc
 from typing import Optional
 import jax
 from jax.experimental.pjit import pjit
@@ -14,6 +15,7 @@ from hf_model_config import PretrainedHFPjitModelConfig
 @dataclass
 class LMInferenceConfigScript(ConfigScript):
     pretrained_model: PretrainedHFPjitModelConfig
+    max_prompt_len: Optional[int]
     max_len: Optional[int]
     seed: int
     n_inferences: int
@@ -41,26 +43,30 @@ class LMInferenceConfigScript(ConfigScript):
         with Mesh(mesh_devices, ("dp", "mp")):
             params, _ = p_get_initial_params(freeze(params), jnp.ones((), dtype=jnp.uint32))
         
-        def generate_fn(tokens, params, rng, max_len):
-            return model.generate(tokens, max_length=max_len, do_sample=True, prng_key=rng, params=params).sequences[0]
+        def generate_fn(tokens, attn_mask, params, rng, max_len):
+            return model.generate(tokens, attention_mask=attn_mask, max_length=max_len, do_sample=True, prng_key=rng, params=params).sequences[0]
 
         # model parallel inference function
         p_generate_fn = pjit(
             generate_fn, 
-            in_axis_resources=(None, param_spec, None), 
+            in_axis_resources=(None, None, param_spec, None), 
             out_axis_resources=None, 
-            static_argnums=(3,), 
+            static_argnums=(4,), 
         )
 
         # get input tokens
-        tokens = jnp.array(tokenizer(self.prompt)['input_ids'], dtype=jnp.int32)
+        if self.max_prompt_len is None:
+            token_out = tokenizer(self.prompt)
+        else:
+            token_out = tokenizer(self.prompt, max_length=self.max_prompt_len, padding='max_length', truncation=True)
+        tokens = jnp.array(token_out['input_ids'], dtype=jnp.int32)
+        attn_mask = jnp.array(token_out['attention_mask'], dtype=jnp.int32)
 
         # generate sequences
         with Mesh(mesh_devices, ("dp", "mp")):
             for _ in range(self.n_inferences):
                 rng, new_rng = jax.random.split(rng)
-                tokens = jnp.array(tokenizer(self.prompt)['input_ids'], dtype=jnp.int32)
-                generation = p_generate_fn(tokens[None], params, new_rng, self.max_len)
+                generation = p_generate_fn(tokens[None], attn_mask[None], params, new_rng, self.max_len)
                 print('='*25)
                 print('input:')
                 print(tokenizer.decode(tokens))
@@ -69,4 +75,3 @@ class LMInferenceConfigScript(ConfigScript):
                 print(tokenizer.decode(generation))
                 print('='*25)
                 print()
-                self.prompt += ' hi !!!'

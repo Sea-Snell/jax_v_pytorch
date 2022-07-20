@@ -23,9 +23,9 @@ def un_jax_logs(logs):
     def un_jax_log_f(x):
         if isinstance(x, jnp.ndarray) or isinstance(x, np.ndarray):
             if len(x.shape) == 0:
-                return x.item()
+                return float(x.item())
             else:
-                return x.tolist()
+                return list(map(float, x.tolist()))
         return x
     return jax.tree_util.tree_map(un_jax_log_f, logs)
 

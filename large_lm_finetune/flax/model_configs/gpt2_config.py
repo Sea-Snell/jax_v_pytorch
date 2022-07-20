@@ -5,7 +5,7 @@ from micro_config import MetaConfig
 from flax.traverse_util import flatten_dict, unflatten_dict
 from flax.core.frozen_dict import unfreeze, freeze
 from jax.experimental import PartitionSpec as P
-from .hf_model import PretrainedHFPjitModelConfig
+from .hf_model import PretrainedHFPjitModelConfig, HFPjitModelResult
 
 # PartitionSpec for GPT2
 # replicate the hidden dim and shard feed-forward and head dim
@@ -50,4 +50,4 @@ class GPT2ModelConfigScript(PretrainedHFPjitModelConfig):
             model, params = load_gpt2(self.model_str, dtype=dtype, pad_token_id=tokenizer.eos_token_id)
             params = self.params_to_dtype(model, params)
         rules = _get_partition_rules_gpt2()
-        return model, params, tokenizer, rules
+        return HFPjitModelResult(model, params, tokenizer, rules)

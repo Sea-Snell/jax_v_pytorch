@@ -10,7 +10,7 @@ from flax.traverse_util import flatten_dict, unflatten_dict
 from flax.core.frozen_dict import unfreeze, freeze
 from jax.experimental import PartitionSpec as P
 from transformers.modeling_flax_pytorch_utils import convert_pytorch_state_dict_to_flax
-from .hf_model import PretrainedHFPjitModelConfig
+from .hf_model import PretrainedHFPjitModelConfig, HFPjitModelResult
 
 # PartitionSpec for T5v1.1
 # replicate the hidden dim and shard feed-forward and head dim
@@ -121,4 +121,4 @@ class T5ModelConfigScript(PretrainedHFPjitModelConfig):
             rules = _get_partition_rules_ul2()
         else:
             rules = _get_partition_rules_t5()
-        return model, params, tokenizer, rules
+        return HFPjitModelResult(model, params, tokenizer, rules)

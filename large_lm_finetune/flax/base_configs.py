@@ -1,10 +1,11 @@
-from typing import Optional
+from typing import Any, Optional
 from micro_config import ConfigScript, MetaConfig
 from dataclasses import dataclass
 from datasets import load_dataset
 from model_configs.hf_model import PretrainedHFPjitModelConfig
 from src import LMDataset, Seq2SeqDataset, chunk_tokens
 import optax
+from adafactor_bffloat16_grad_accum import Bf16AdaMultiSteps
 import os
 import numpy as np
 
@@ -63,3 +64,18 @@ class AdamWConfig(ConfigScript):
                                      use_grad_mean=True)
         return optimizer
 
+@dataclass
+class AdaFactorConfig(ConfigScript):
+    lr: float
+    multiply_by_parameter_scale: bool
+    grad_accum_steps: int
+    dtype_momentum: Any
+
+    def unroll(self, metaconfig: MetaConfig) -> optax.GradientTransformation:
+        optimizer = optax.adafactor(self.lr, 
+                                    multiply_by_parameter_scale=self.multiply_by_parameter_scale, 
+                                    dtype_momentum=self.dtype_momentum)
+        optimizer = Bf16AdaMultiSteps(optimizer, 
+                                      self.grad_accum_steps, 
+                                      use_grad_mean=True)
+        return optimizer
