@@ -273,7 +273,7 @@ class TrainLoop(ConfigScript):
         
         # utils for splitting params per-host
         def get_param_shapes(rng):
-            return model.init_weights(rng, (1, 1,))
+            return freeze(model.init_weights(rng, (1, 1,)))
         
         def host_param_shard(host_param_shapes, params):
             def split_param(host_shape, param):
@@ -300,7 +300,6 @@ class TrainLoop(ConfigScript):
         # split the parameters per-host
         with Mesh(mesh_devices, ("dp", "mp")):
             rng, new_rng = jax.random.split(rng)
-            breakpoint()
             host_param_shapes = jax.eval_shape(p_get_param_shapes, new_rng)
         with jax.default_device(jax.devices('cpu')[0]):
             params = host_param_shard(host_param_shapes, params)
