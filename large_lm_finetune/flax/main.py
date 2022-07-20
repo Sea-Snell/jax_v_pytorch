@@ -39,7 +39,7 @@ t5_model = T5ModelConfigScript(
     params=None, 
 )
 
-model = t5_model
+model = gpt2_model
 
 wikitext_lm_train = WikitextLMConfig(
     version="wikitext-2-raw-v1", 
@@ -56,7 +56,7 @@ wikitext_seq2seq_train = WikitextSeq2SeqConfig(
     model_tokenizer=model, 
 )
 
-train_dataset = wikitext_seq2seq_train
+train_dataset = wikitext_lm_train
 
 wikitext_lm_eval = WikitextLMConfig(
     version="wikitext-2-raw-v1", 
@@ -88,7 +88,7 @@ adafactor_optim = AdaFactorConfig(
     dtype_momentum=jnp.bfloat16, 
 )
 
-optim = adafactor_optim
+optim = adamw_optim
 
 evaluator = StandardEvaluator(
     eval_data=eval_dataset, 

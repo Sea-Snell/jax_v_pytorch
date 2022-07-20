@@ -96,8 +96,8 @@ def load_t5(model_str, dtype=jnp.float32, gradient_checkpoint=True, **kwargs):
     else:
         try:
             model, params = FlaxT5ForConditionalGeneration.from_pretrained(model_str, _do_init=False, dtype=dtype, **kwargs)
-            # config = T5Config.from_pretrained(model_str, dtype=dtype, gradient_checkpointing=gradient_checkpoint, **kwargs)
-            # model = FlaxT5ForConditionalGeneration(config, _do_init=False, dtype=dtype)
+            config = T5Config.from_pretrained(model_str, dtype=dtype, gradient_checkpointing=gradient_checkpoint, **kwargs)
+            model = FlaxT5ForConditionalGeneration(config, _do_init=False, dtype=dtype)
         except:
             model = FlaxT5ForConditionalGeneration.from_pretrained(model_str, _do_init=True, from_pt=True, dtype=dtype, **kwargs)
             params = model.params
