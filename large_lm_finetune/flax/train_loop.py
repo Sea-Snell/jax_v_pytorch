@@ -22,7 +22,7 @@ import json
 import jax.numpy as jnp
 from flax.core.frozen_dict import freeze, unfreeze, FrozenDict
 import optax
-from jax.experimental.pjit import pjit
+from jax.experimental.pjit import pjit, with_sharding_constraint
 from load_model_utils import _id_fn
 from jax.experimental.maps import Mesh
 import numpy as np
@@ -243,15 +243,15 @@ class TrainLoop(ConfigScript):
         else:
             p_get_initial_state = get_initial_state
         
-        def get_param_shapes(rng, input_shape):
-            return jax.eval_shape(model.init_weights, rng, input_shape)
+        # def get_param_shapes(rng, input_shape):
+        #     return jax.eval_shape(model.init_weights, rng, input_shape)
         
-        p_get_initial_state = pjit(
-            get_param_shapes,
-            in_axis_resources=(None,), 
-            out_axis_resources=param_spec, 
-            static_argnums=(1,), 
-        )
+        # p_get_initial_state = pjit(
+        #     get_param_shapes,
+        #     in_axis_resources=(None,), 
+        #     out_axis_resources=param_spec, 
+        #     static_argnums=(1,), 
+        # )
 
         # mesh definition
         mesh_devices = np.array(jax.devices()).reshape(1, jax.device_count())
@@ -260,9 +260,10 @@ class TrainLoop(ConfigScript):
 
         # split the opt_state and params between all devices
         with Mesh(mesh_devices, ("dp", "mp")):
-            # opt_state, params = p_get_initial_state(params)
-            rng, new_rng = jax.random.split(rng)
-            params = p_get_initial_state(new_rng, (1, 1,))
+            params = with_sharding_constraint(params, param_spec)
+            opt_state, params = p_get_initial_state(params)
+            # rng, new_rng = jax.random.split(rng)
+            # params = p_get_initial_state(new_rng, (1, 1,))
         # print(jax.tree_util.tree_map(lambda x: list(map(lambda y: y.shape, x.device_buffers)), params))
         print(jax.tree_util.tree_map(lambda x: x.shape, params))
         
