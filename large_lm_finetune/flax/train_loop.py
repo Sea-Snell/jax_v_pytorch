@@ -243,13 +243,14 @@ class TrainLoop(ConfigScript):
         else:
             p_get_initial_state = get_initial_state
         
-        def get_param_shapes(rng):
-            return jax.eval_shape(model.init_weights, rng, (1, 1,))
+        def get_param_shapes(rng, input_shape):
+            return jax.eval_shape(model.init_weights, rng, input_shape)
         
         p_get_initial_state = pjit(
             get_param_shapes,
             in_axis_resources=(None,), 
             out_axis_resources=param_spec, 
+            static_argnums=(1,), 
         )
 
         # mesh definition
@@ -263,7 +264,7 @@ class TrainLoop(ConfigScript):
             rng, new_rng = jax.random.split(rng)
             params = p_get_initial_state(new_rng)
         # print(jax.tree_util.tree_map(lambda x: list(map(lambda y: y.shape, x.device_buffers)), params))
-        print(jax.tree_util.tree_map(lambda x: x.shape, params))
+        print(jax.tree_util.tree_map(lambda x: x.shape, params, (1, 1,)))
         
         # # define lm training step
         # def lm_step_fn(params: PyTree, opt_state: PyTree, rng: jax.random.PRNGKey, batch: FrozenDict):
