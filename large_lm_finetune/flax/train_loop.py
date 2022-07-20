@@ -198,7 +198,6 @@ class TrainLoop(ConfigScript):
         # Shard params and optimizer state onto devices
         # Source: https://github.com/huggingface/transformers/blob/main/examples/research_projects/jax-projects/model_parallel/run_clm_mp.py
         def get_initial_state(params):
-            params = with_sharding_constraint(params, param_spec)
             opt_state = optim.init(params)
             return opt_state, params
 
@@ -233,11 +232,16 @@ class TrainLoop(ConfigScript):
         else:
             raise NotImplementedError
 
+        def get_initial_state2(params):
+            params = with_sharding_constraint(params, param_spec)
+            opt_state, params = get_initial_state(params)
+            return opt_state, params
+
         # pjit the get_initial_state function to shard params and init
         # optimizer state in sharded way
         if self.pjit:
             p_get_initial_state = pjit(
-                get_initial_state,
+                get_initial_state2,
                 in_axis_resources=(param_spec,), 
                 out_axis_resources=(opt_state_spec, param_spec),
             )
