@@ -263,6 +263,7 @@ class TrainLoop(ConfigScript):
             rng, new_rng = jax.random.split(rng)
             params = p_get_initial_state(new_rng)
         print(jax.tree_util.tree_map(lambda x: list(map(lambda y: y.shape, x.device_buffers)), params))
+        print(jax.tree_util.tree_map(lambda x: x.shape), params))
         
         # # define lm training step
         # def lm_step_fn(params: PyTree, opt_state: PyTree, rng: jax.random.PRNGKey, batch: FrozenDict):
