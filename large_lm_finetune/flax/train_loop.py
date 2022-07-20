@@ -195,6 +195,8 @@ class TrainLoop(ConfigScript):
             position_ids = jnp.broadcast_to(jnp.arange(self.max_len)[None, :], (self.bsize, self.max_len))
         pad_id = jnp.asarray(tokenizer.pad_token_id, dtype=jnp.int32)
 
+        print(jax.tree_util.tree_map(lambda x: list(map(lambda y: y.shape, x.device_buffers)), params))
+
         # Shard params and optimizer state onto devices
         # Source: https://github.com/huggingface/transformers/blob/main/examples/research_projects/jax-projects/model_parallel/run_clm_mp.py
         def get_initial_state(params):
@@ -251,7 +253,7 @@ class TrainLoop(ConfigScript):
         # split the opt_state and params between all devices
         with Mesh(mesh_devices, ("dp", "mp")):
             opt_state, params = p_get_initial_state(params)
-        print(jax.tree_util.tree_map(lambda x: list(map(lambda y: y.shape, x.device_buffers)), params))
+        # print(jax.tree_util.tree_map(lambda x: list(map(lambda y: y.shape, x.device_buffers)), params))
         
         # define lm training step
         def lm_step_fn(params: PyTree, opt_state: PyTree, rng: jax.random.PRNGKey, batch: FrozenDict):
