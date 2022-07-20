@@ -32,7 +32,7 @@ opt_model = OPTModelConfigScript(
 
 t5_model = T5ModelConfigScript(
     # model_str="google/t5-v1_1-xl", 
-    model_str="t5-small", 
+    model_str="t5-11b", 
     # model_str="google/ul2", 
     use_fp16=True, 
     gradient_checkpoint=True, 
