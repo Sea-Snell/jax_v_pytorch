@@ -56,7 +56,7 @@ wikitext_seq2seq_train = WikitextSeq2SeqConfig(
     model_tokenizer=model, 
 )
 
-train_dataset = wikitext_lm_train
+train_dataset = wikitext_seq2seq_train
 
 wikitext_lm_eval = WikitextLMConfig(
     version="wikitext-2-raw-v1", 
