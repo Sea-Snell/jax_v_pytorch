@@ -243,11 +243,11 @@ class TrainLoop(ConfigScript):
         else:
             p_get_initial_state = get_initial_state
         
-        def get_params(rng):
-            return model.init_weights(rng, (1, 1,))
+        def get_param_shapes(rng):
+            return jax.eval_shape(model.init_weights, rng, (1, 1,))
         
         p_get_initial_state = pjit(
-            get_params,
+            get_param_shapes,
             in_axis_resources=(None,), 
             out_axis_resources=param_spec, 
         )
@@ -261,7 +261,7 @@ class TrainLoop(ConfigScript):
         with Mesh(mesh_devices, ("dp", "mp")):
             # opt_state, params = p_get_initial_state(params)
             rng, new_rng = jax.random.split(rng)
-            params = jax.eval_shape(p_get_initial_state, new_rng)
+            params = p_get_initial_state(new_rng)
         # print(jax.tree_util.tree_map(lambda x: list(map(lambda y: y.shape, x.device_buffers)), params))
         print(jax.tree_util.tree_map(lambda x: x.shape, params))
         
