@@ -262,9 +262,9 @@ class TrainLoop(ConfigScript):
         with Mesh(mesh_devices, ("dp", "mp")):
             # opt_state, params = p_get_initial_state(params)
             rng, new_rng = jax.random.split(rng)
-            params = p_get_initial_state(new_rng)
+            params = p_get_initial_state(new_rng, (1, 1,)
         # print(jax.tree_util.tree_map(lambda x: list(map(lambda y: y.shape, x.device_buffers)), params))
-        print(jax.tree_util.tree_map(lambda x: x.shape, params, (1, 1,)))
+        print(jax.tree_util.tree_map(lambda x: x.shape, params)))
         
         # # define lm training step
         # def lm_step_fn(params: PyTree, opt_state: PyTree, rng: jax.random.PRNGKey, batch: FrozenDict):
