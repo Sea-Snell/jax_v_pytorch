@@ -250,7 +250,7 @@ class TrainLoop(ConfigScript):
         def host_param_shard(host_param_shapes, params):
             def split_param(host_shape, param):
                 param_shape_arr = jnp.array(param.shape, dtype=jnp.int32)
-                host_shape_arr = jnp.array(host_shape, dtype=jnp.int32)
+                host_shape_arr = jnp.array(host_shape.shape, dtype=jnp.int32)
                 mask = (param_shape_arr != host_shape_arr).astype(jnp.int32)
                 return jax.lax.dynamic_slice(param, mask * host_shape_arr * jax.process_index(), host_shape_arr)
             return jax.tree_util.tree_map(split_param, host_param_shapes, params)
