@@ -198,6 +198,7 @@ class TrainLoop(ConfigScript):
         # Shard params and optimizer state onto devices
         # Source: https://github.com/huggingface/transformers/blob/main/examples/research_projects/jax-projects/model_parallel/run_clm_mp.py
         def get_initial_state(params):
+            params = with_sharding_constraint(params, param_spec)
             opt_state = optim.init(params)
             return opt_state, params
 
@@ -260,7 +261,6 @@ class TrainLoop(ConfigScript):
 
         # split the opt_state and params between all devices
         with Mesh(mesh_devices, ("dp", "mp")):
-            params = with_sharding_constraint(params, param_spec)
             opt_state, params = p_get_initial_state(params)
             # rng, new_rng = jax.random.split(rng)
             # params = p_get_initial_state(new_rng, (1, 1,))
