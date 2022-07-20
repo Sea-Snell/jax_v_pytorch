@@ -1419,7 +1419,6 @@ class FlaxT5ForConditionalGenerationModule(nn.Module):
             self.config.d_model,
             embedding_init=jax.nn.initializers.normal(self.config.initializer_factor),
         )
-        print(self.shared.embedding.shape)
 
         encoder_config = copy.deepcopy(self.config)
         encoder_config.causal = False
