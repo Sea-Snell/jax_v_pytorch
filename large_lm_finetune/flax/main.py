@@ -28,7 +28,7 @@ opt_model = OPTModelConfigScript(
 
 t5_model = T5ModelConfigScript(
     # model_str="google/t5-v1_1-xl", 
-    model_str="t5-3b", 
+    model_str="t5-11b", 
     # model_str="google/ul2", 
     use_fp16=True, 
     gradient_checkpoint=True, 
@@ -68,7 +68,7 @@ train = TrainLoop(
     max_checkpoints=None, 
     epochs=10, 
     max_steps=None, 
-    bsize=16, 
+    bsize=1, 
     max_len=seq_len, 
     prefetch_batches=None, 
     log_every=16, 
