@@ -261,7 +261,7 @@ class TrainLoop(ConfigScript):
         with Mesh(mesh_devices, ("dp", "mp")):
             # opt_state, params = p_get_initial_state(params)
             rng, new_rng = jax.random.split(rng)
-            params = p_get_initial_state(new_rng)
+            params = jax.eval_shape(p_get_initial_state, new_rng)
         print(jax.tree_util.tree_map(lambda x: list(map(lambda y: y.shape, x.device_buffers)), params))
         print(jax.tree_util.tree_map(lambda x: x.shape, params))
         
