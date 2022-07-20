@@ -301,7 +301,6 @@ class TrainLoop(ConfigScript):
         with Mesh(mesh_devices, ("dp", "mp")):
             rng, new_rng = jax.random.split(rng)
             host_param_shapes = jax.eval_shape(p_get_param_shapes, new_rng)
-        print(host_param_shapes == jax.eval_shape(lambda x: x, params))
         with jax.default_device(jax.devices('cpu')[0]):
             params = host_param_shard(host_param_shapes, params)
 
@@ -377,7 +376,8 @@ class TrainLoop(ConfigScript):
                     if (step + 1) % self.log_every == 0:
                         logs = reduce_logs(train_logs)
                         logs = pool_logs(label_logs(logs, 'train', {'step': step+1, 'epoch': epoch}))
-                        if jax.process_index() == 0:
+                        # if jax.process_index() == 0:
+                        if True:
                             log(logs, self.use_wandb)
                     
                     # clear training logs
@@ -393,12 +393,14 @@ class TrainLoop(ConfigScript):
 
                         # publish eval logs
                         eval_logs = pool_logs(label_logs(eval_logs, 'eval', {'step': step+1, 'epoch': epoch}))
-                        if jax.process_index() == 0:
+                        # if jax.process_index() == 0:
+                        if True:
                             log(eval_logs, self.use_wandb)
 
                         # conditionally save best model and optimizer state
                         if save_dir is not None and eval_perf < best_perf:
-                            if jax.process_index() == 0:
+                            # if jax.process_index() == 0:
+                            if True:
                                 print('new best model! Saving ...')
                                 model_dir = os.path.join(save_dir, 'model')
                                 model.save_pretrained(
@@ -410,7 +412,8 @@ class TrainLoop(ConfigScript):
                     
                     # periodically save checkpoint
                     if save_dir is not None and self.save_every is not None and (step + 1) % self.save_every == 0:
-                        if jax.process_index() == 0:
+                        # if jax.process_index() == 0:
+                        if True:
                             print('saving checkpoint...')
 
                             # conditionally delete old checkpoints
