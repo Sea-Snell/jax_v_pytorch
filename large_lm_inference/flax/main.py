@@ -23,11 +23,11 @@ opt_model = OPTModelConfigScript(
 t5_model = T5ModelConfigScript(
     # model_str="google/t5-v1_1-xl", 
     # model_str="t5-11b", 
-    model_str="google/ul2", 
+    model_str="google/t5-small", 
     use_fp16=True, 
 )
 
-pretrained_model = opt_model
+pretrained_model = t5_model
 
 lm_inference = LMInferenceConfigScript(
     pretrained_model=pretrained_model, 
