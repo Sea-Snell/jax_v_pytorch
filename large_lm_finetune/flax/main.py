@@ -76,13 +76,13 @@ wikitext_seq2seq_eval = WikitextSeq2SeqConfig(
 eval_dataset = wikitext_seq2seq_eval
 
 adamw_optim = AdamWConfig(
-    grad_accum_steps=8, 
+    grad_accum_steps=1, 
     lr=1e-5, 
     weight_decay=0.00, 
 )
 
 adafactor_optim = AdaFactorConfig(
-    grad_accum_steps=8, 
+    grad_accum_steps=1, 
     lr=0.001, 
     multiply_by_parameter_scale=False, 
     dtype_momentum=jnp.bfloat16, 
@@ -113,7 +113,7 @@ train = TrainLoop(
     max_checkpoints=None, 
     epochs=10, 
     max_steps=None, 
-    bsize=1, 
+    bsize=32, 
     max_len=seq_len, 
     prefetch_batches=None, 
     log_every=16, 
