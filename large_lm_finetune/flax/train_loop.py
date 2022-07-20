@@ -363,9 +363,9 @@ class TrainLoop(ConfigScript):
 
         # train loop
         with Mesh(mesh_devices, ("dp", "mp")):
-            for epoch in tqdm(range(self.epochs)):
+            for epoch in tqdm(range(self.epochs), disable=jax.process_index() > 0):
                 rng, new_rng = jax.random.split(rng)
-                for items in tqdm(dataloader(new_rng), total=(len(train_dataset) // self.bsize)):
+                for items in tqdm(dataloader(new_rng), total=(len(train_dataset) // self.bsize), disable=jax.process_index() > 0):
                     
                     # step model and get training logs
                     rng, new_rng = jax.random.split(rng)
@@ -376,9 +376,7 @@ class TrainLoop(ConfigScript):
                     if (step + 1) % self.log_every == 0:
                         logs = reduce_logs(train_logs)
                         logs = pool_logs(label_logs(logs, 'train', {'step': step+1, 'epoch': epoch}))
-                        # if jax.process_index() == 0:
-                        print(logs)
-                        if True:
+                        if jax.process_index() == 0:
                             log(logs, self.use_wandb)
                     
                     # clear training logs
@@ -394,27 +392,23 @@ class TrainLoop(ConfigScript):
 
                         # publish eval logs
                         eval_logs = pool_logs(label_logs(eval_logs, 'eval', {'step': step+1, 'epoch': epoch}))
-                        # if jax.process_index() == 0:
-                        if True:
+                        if jax.process_index() == 0:
                             log(eval_logs, self.use_wandb)
 
                         # conditionally save best model and optimizer state
                         if save_dir is not None and eval_perf < best_perf:
-                            # if jax.process_index() == 0:
-                            if True:
-                                print('new best model! Saving ...')
-                                model_dir = os.path.join(save_dir, 'model')
-                                model.save_pretrained(
-                                    model_dir, 
-                                    params=params, 
-                                )
-                                print('saved.')
-                                best_perf = eval_perf
+                            print('new best model! Saving ...')
+                            model_dir = os.path.join(save_dir, 'model')
+                            model.save_pretrained(
+                                model_dir, 
+                                params=jax.device_get(params), 
+                            )
+                            print('saved.')
+                            best_perf = eval_perf
                     
                     # periodically save checkpoint
                     if save_dir is not None and self.save_every is not None and (step + 1) % self.save_every == 0:
-                        # if jax.process_index() == 0:
-                        if True:
+                        if jax.process_index() == 0:
                             print('saving checkpoint...')
 
                             # conditionally delete old checkpoints
@@ -424,7 +418,7 @@ class TrainLoop(ConfigScript):
                             model_dir = os.path.join(save_dir, 'model_%d' % (step+1))
                             model.save_pretrained(
                                 model_dir, 
-                                params=params, 
+                                params=jax.device_get(params), 
                             )
                             saved_checkpoints.append(model_dir)
                         print('saved.')
