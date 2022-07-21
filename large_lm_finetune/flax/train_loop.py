@@ -316,7 +316,7 @@ class TrainLoop(ConfigScript):
             rng, new_rng = jax.random.split(rng)
             host_param_shapes = jax.eval_shape(p_get_param_shapes, new_rng)
         with jax.default_device(jax.devices('cpu')[0]):
-            params = host_param_shard(host_param_shapes, params)
+            params = host_param_shard(host_param_shapes, params, mesh_devices, 1)
 
         # split the opt_state and params between all devices
         with Mesh(mesh_devices, ("dp", "mp")):

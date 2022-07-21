@@ -76,7 +76,7 @@ class LMInferenceConfigScript(ConfigScript):
         # split the parameters per-host
         with Mesh(mesh_devices, ("dp", "mp")):
             rng, new_rng = jax.random.split(rng)
-            host_param_shapes = jax.eval_shape(p_get_param_shapes, new_rng)
+            host_param_shapes = jax.eval_shape(p_get_param_shapes, new_rng, mesh_devices, 1)
         with jax.default_device(jax.devices('cpu')[0]):
             params = host_param_shard(host_param_shapes, params)
 
