@@ -120,7 +120,7 @@ train = TrainLoop(
     eval_every=4096, 
     save_every=None, 
     pjit=True, 
-    use_wandb=False, 
+    use_wandb=True, 
     wandb_project='pjit_flax_wikitext_finetune', 
     loss_kwargs={}, 
 )
