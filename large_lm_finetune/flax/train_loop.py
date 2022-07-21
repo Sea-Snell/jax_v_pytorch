@@ -273,7 +273,7 @@ class TrainLoop(ConfigScript):
         
         # utils for splitting params per-host
         def get_param_shapes(rng):
-            return freeze(model.init_weights(rng, (1, 1,)))
+            return model.init_weights(rng, (1, 1,))
         
         def host_param_shard(host_param_shapes, params):
             def split_param(host_shape, param):
