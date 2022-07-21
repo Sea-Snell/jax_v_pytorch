@@ -48,7 +48,7 @@ class LMInferenceConfigScript(ConfigScript):
                 return jax.lax.dynamic_slice(param, mask * host_shape_arr * process_idx, host_shape_arr)
             match_points = []
             for i in range(mesh_devices.shape[mp_axis]):
-                process_id_match = jax.process_index() == tree.map_structure(lambda x: x.process_id, np.take(mesh_devices, i, axis=mp_axis))
+                process_id_match = (jax.process_index() == np.asarray(tree.map_structure(lambda x: x.process_index, np.take(mesh_devices, i, axis=mp_axis).tolist())))
                 is_match = np.all(process_id_match)
                 some_match = np.any(process_id_match)
                 assert is_match or (not some_match), "host devices must form a contiguous chunk"
@@ -56,7 +56,7 @@ class LMInferenceConfigScript(ConfigScript):
                     match_points.append(i)
             assert len(match_points) == (mesh_devices.shape[mp_axis] // jax.process_count()), "number param devices on host must be the same for all hosts"
             assert sorted(match_points) == list(range(min(match_points), min(match_points)+len(match_points))), "host devices must form a contiguous chunk"
-            process_idx = min(match_points) // jax.process_count()
+            process_idx = min(match_points) // len(match_points)
             return jax.tree_util.tree_map(split_param, host_param_shapes, params, process_idx)
         
         if self.pjit:
