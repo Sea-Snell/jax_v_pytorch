@@ -94,6 +94,8 @@ def load_t5(model_str, dtype=jnp.float32, gradient_checkpoint=True, **kwargs):
         model = FlaxT5ForConditionalGeneration(config, dtype=dtype, **kwargs)
         params = convert_pytorch_state_dict_to_flax(pytorch_model.state_dict(), model)
         params.pop('lm_head')
+        params['encoder'].pop('embed_tokens')
+        params['decoder'].pop('embed_tokens')
         breakpoint()
     else:
         try:
