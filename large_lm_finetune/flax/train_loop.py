@@ -273,7 +273,7 @@ class TrainLoop(ConfigScript):
         
         # utils for splitting params per-host
         def get_param_shapes(rng):
-            print(jax.tree_util.tree_map(lambda x: type(x), model.init_weights(rng, (1, 1,)), is_leaf=lambda x: isinstance(x, (dict,))))
+            print(jax.tree_util.tree_map(lambda x: type(x), model.init_weights(rng, (1, 1,)), is_leaf=lambda x: isinstance(x, (dict,FrozenDict,)) and not isinstance(x, FrozenDict)))
             return freeze(model.init_weights(rng, (1, 1,)))
         
         def host_param_shard(host_param_shapes, params):
@@ -299,7 +299,7 @@ class TrainLoop(ConfigScript):
         print('full mesh:', mesh_devices)
 
         # split the parameters per-host
-        print(jax.tree_util.tree_map(lambda x: type(x), params, is_leaf=lambda x: isinstance(x, (dict,))))
+        print(jax.tree_util.tree_map(lambda x: type(x), params, is_leaf=lambda x: isinstance(x, (dict,FrozenDict,)) and not isinstance(x, FrozenDict)))
         with Mesh(mesh_devices, ("dp", "mp")):
             rng, new_rng = jax.random.split(rng)
             host_param_shapes = jax.eval_shape(p_get_param_shapes, new_rng)
