@@ -278,11 +278,6 @@ class TrainLoop(ConfigScript):
             return model.init_weights(rng, (1, 1,))
         
         def host_param_shard(host_param_shapes, params, mesh_devices, mp_axis):
-            def split_param(host_shape, param, process_idx):
-                param_shape_arr = jnp.array(param.shape, dtype=jnp.int32)
-                host_shape_arr = jnp.array(host_shape.shape, dtype=jnp.int32)
-                mask = (param_shape_arr != host_shape_arr).astype(jnp.int32)
-                return jax.lax.dynamic_slice(param, mask * host_shape_arr * process_idx, host_shape_arr)
             match_points = []
             for i in range(mesh_devices.shape[mp_axis]):
                 process_id_match = (jax.process_index() == np.asarray(tree.map_structure(lambda x: x.process_index, np.take(mesh_devices, i, axis=mp_axis).tolist())))
@@ -294,7 +289,12 @@ class TrainLoop(ConfigScript):
             assert len(match_points) == (mesh_devices.shape[mp_axis] // jax.process_count()), "number param devices on host must be the same for all hosts"
             assert sorted(match_points) == list(range(min(match_points), min(match_points)+len(match_points))), "host devices must form a contiguous chunk"
             process_idx = min(match_points) // len(match_points)
-            return jax.tree_util.tree_map(split_param, host_param_shapes, params, process_idx)
+            def split_param(host_shape, param):
+                param_shape_arr = jnp.array(param.shape, dtype=jnp.int32)
+                host_shape_arr = jnp.array(host_shape.shape, dtype=jnp.int32)
+                mask = (param_shape_arr != host_shape_arr).astype(jnp.int32)
+                return jax.lax.dynamic_slice(param, mask * host_shape_arr * process_idx, host_shape_arr)
+            return jax.tree_util.tree_map(split_param, host_param_shapes, params)
         
         if self.pjit:
             p_get_param_shapes = pjit(
