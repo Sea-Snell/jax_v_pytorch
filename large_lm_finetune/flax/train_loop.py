@@ -299,6 +299,7 @@ class TrainLoop(ConfigScript):
         print('full mesh:', mesh_devices)
 
         # split the parameters per-host
+        print(params)
         with Mesh(mesh_devices, ("dp", "mp")):
             rng, new_rng = jax.random.split(rng)
             host_param_shapes = jax.eval_shape(p_get_param_shapes, new_rng)
