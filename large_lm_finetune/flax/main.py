@@ -32,7 +32,7 @@ opt_model = OPTModelConfigScript(
 
 t5_model = T5ModelConfigScript(
     # model_str="google/t5-v1_1-xl", 
-    # model_str="t5-11b", 
+    # model_str="t5-small", 
     model_str="google/ul2", 
     use_fp16=True, 
     gradient_checkpoint=True, 
@@ -120,7 +120,7 @@ train = TrainLoop(
     eval_every=4096, 
     save_every=None, 
     pjit=True, 
-    use_wandb=True, 
+    use_wandb=False, 
     wandb_project='pjit_flax_wikitext_finetune', 
     loss_kwargs={}, 
 )

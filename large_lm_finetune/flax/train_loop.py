@@ -3,6 +3,8 @@ from functools import partial
 from typing import Optional, Dict, Any
 from micro_config import ConfigScript, MetaConfig, ConfigScriptNoCache
 from dataclasses import dataclass, asdict
+
+import tree
 from flax_hf_configs import ConfigScriptRNG
 from flax_utils import rngs_from_keys, batch_iterator, prefetch
 from collections import deque, namedtuple
@@ -125,7 +127,7 @@ class StandardEvaluator(ConfigScriptNoCache):
         def lm_eval_loss(params, batch):
             batch = batch.unfreeze()
             attn_mask = (batch['input_ids'] != pad_id).astype(jnp.int32)
-            batch['attention_mask'] = attn_mask
+            batch['attention_mask'], batch['position_ids'] = attn_mask, position_ids
             logits = model(**batch, params=params, train=False).logits
             _, logs = model_loss(logits[:, :-1, :], batch['input_ids'][:, 1:], attn_mask[:, :-1])
             return logs
@@ -275,13 +277,25 @@ class TrainLoop(ConfigScript):
         def get_param_shapes(rng):
             return model.init_weights(rng, (1, 1,))
         
-        def host_param_shard(host_param_shapes, params):
-            def split_param(host_shape, param):
+        def host_param_shard(host_param_shapes, params, mesh_devices, mp_axis):
+            def split_param(host_shape, param, process_idx):
                 param_shape_arr = jnp.array(param.shape, dtype=jnp.int32)
                 host_shape_arr = jnp.array(host_shape.shape, dtype=jnp.int32)
                 mask = (param_shape_arr != host_shape_arr).astype(jnp.int32)
-                return jax.lax.dynamic_slice(param, mask * host_shape_arr * jax.process_index(), host_shape_arr)
-            return jax.tree_util.tree_map(split_param, host_param_shapes, params)
+                return jax.lax.dynamic_slice(param, mask * host_shape_arr * process_idx, host_shape_arr)
+            match_points = []
+            for i in range(mesh_devices.shape[mp_axis]):
+                process_id_match = jax.process_index() == tree.map_structure(lambda x: x.process_id, np.take(mesh_devices, i, axis=mp_axis))
+                is_match = np.all(process_id_match)
+                some_match = np.any(process_id_match)
+                assert is_match or (not some_match), "host devices must form a contiguous chunk"
+                if is_match:
+                    match_points.append(i)
+            assert len(match_points) == (mesh_devices.shape[mp_axis] // jax.process_count()), "number param devices on host must be the same for all hosts"
+            assert sorted(match_points) == list(range(min(match_points), min(match_points)+len(match_points))), "host devices must form a contiguous chunk"
+            process_idx = min(match_points) // jax.process_count()
+            breakpoint()
+            return jax.tree_util.tree_map(split_param, host_param_shapes, params, process_idx)
         
         if self.pjit:
             p_get_param_shapes = pjit(

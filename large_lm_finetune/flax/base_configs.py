@@ -75,7 +75,7 @@ class AdaFactorConfig(ConfigScript):
         optimizer = optax.adafactor(self.lr, 
                                     multiply_by_parameter_scale=self.multiply_by_parameter_scale, 
                                     dtype_momentum=self.dtype_momentum)
-        optimizer = Bf16AdaMultiSteps(optimizer, 
+        optimizer = optax.MultiSteps(optimizer, 
                                       self.grad_accum_steps, 
                                       use_grad_mean=True)
         return optimizer

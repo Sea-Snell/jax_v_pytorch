@@ -11,6 +11,7 @@ from load_model_utils import set_partitions, _id_fn
 import numpy as np
 from jax.experimental.maps import Mesh
 from hf_model_config import PretrainedHFPjitModelConfig
+import tree
 
 @dataclass
 class LMInferenceConfigScript(ConfigScript):
@@ -39,13 +40,24 @@ class LMInferenceConfigScript(ConfigScript):
         def get_param_shapes(rng):
             return model.init_weights(rng, (1, 1,))
         
-        def host_param_shard(host_param_shapes, params):
-            def split_param(host_shape, param):
+        def host_param_shard(host_param_shapes, params, mesh_devices, mp_axis):
+            def split_param(host_shape, param, process_idx):
                 param_shape_arr = jnp.array(param.shape, dtype=jnp.int32)
                 host_shape_arr = jnp.array(host_shape.shape, dtype=jnp.int32)
                 mask = (param_shape_arr != host_shape_arr).astype(jnp.int32)
-                return jax.lax.dynamic_slice(param, mask * host_shape_arr * jax.process_index(), host_shape_arr)
-            return jax.tree_util.tree_map(split_param, host_param_shapes, params)
+                return jax.lax.dynamic_slice(param, mask * host_shape_arr * process_idx, host_shape_arr)
+            match_points = []
+            for i in range(mesh_devices.shape[mp_axis]):
+                process_id_match = jax.process_index() == tree.map_structure(lambda x: x.process_id, np.take(mesh_devices, i, axis=mp_axis))
+                is_match = np.all(process_id_match)
+                some_match = np.any(process_id_match)
+                assert is_match or (not some_match), "host devices must form a contiguous chunk"
+                if is_match:
+                    match_points.append(i)
+            assert len(match_points) == (mesh_devices.shape[mp_axis] // jax.process_count()), "number param devices on host must be the same for all hosts"
+            assert sorted(match_points) == list(range(min(match_points), min(match_points)+len(match_points))), "host devices must form a contiguous chunk"
+            process_idx = min(match_points) // jax.process_count()
+            return jax.tree_util.tree_map(split_param, host_param_shapes, params, process_idx)
         
         if self.pjit:
             p_get_param_shapes = pjit(
