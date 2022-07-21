@@ -27,7 +27,7 @@ t5_model = T5ModelConfigScript(
     use_fp16=True, 
 )
 
-pretrained_model = gpt2_model
+pretrained_model = t5_model
 
 lm_inference = LMInferenceConfigScript(
     pretrained_model=pretrained_model, 
