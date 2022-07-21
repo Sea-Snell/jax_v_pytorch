@@ -298,7 +298,7 @@ class TrainLoop(ConfigScript):
         print('full mesh:', mesh_devices)
 
         _, new_rng = jax.random.split(rng)
-        p = jax.eval_shape(get_param_shapes, new_rng)
+        p_ = jax.eval_shape(get_param_shapes, new_rng)
         breakpoint()
 
         # split the parameters per-host
