@@ -42,7 +42,7 @@ class WikitextSeq2SeqConfig(ConfigScript):
         assert self.version in ["wikitext-103-raw-v1", "wikitext-2-raw-v1"]
         assert self.split in ["train", "valid", "test"]
 
-    def unroll(self, metaconfig: MetaConfig) -> LMDataset:
+    def unroll(self, metaconfig: MetaConfig) -> Seq2SeqDataset:
         dataset = load_dataset("wikitext", self.version, split=self.split)
         all_text = ''.join(map(lambda x: x['text'], dataset))
         _, _, tokenizer, _ = self.model_tokenizer.unroll(metaconfig)
