@@ -20,6 +20,7 @@ class LMInferenceConfigScript(ConfigScript):
     seed: int
     n_inferences: int
     prompt: str
+    pjit: bool
 
     def unroll(self, metaconfig: MetaConfig):
         rng = jax.random.PRNGKey(self.seed)
@@ -75,12 +76,15 @@ class LMInferenceConfigScript(ConfigScript):
             return model.generate(tokens, attention_mask=attn_mask, max_length=max_len, do_sample=True, prng_key=rng, params=params).sequences[0]
 
         # model parallel inference function
-        p_generate_fn = pjit(
-            generate_fn, 
-            in_axis_resources=(None, None, param_spec, None), 
-            out_axis_resources=None, 
-            static_argnums=(4,), 
-        )
+        if self.pjit:
+            p_generate_fn = pjit(
+                generate_fn, 
+                in_axis_resources=(None, None, param_spec, None), 
+                out_axis_resources=None, 
+                static_argnums=(4,), 
+            )
+        else:
+            p_generate_fn = generate_fn
 
         # get input tokens
         if self.max_prompt_len is None:

@@ -38,6 +38,7 @@ lm_inference = LMInferenceConfigScript(
     # prompt='[S2S] hi my friend! <extra_id_0>', 
     prompt='hi my friend!', 
     # prompt='translate English to German: The house is wonderful.', 
+    pjit=True, 
 )
 
 if __name__ == "__main__":
