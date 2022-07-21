@@ -13,7 +13,7 @@ cd jax_v_pytorch
 
 ### **2. install dependencies**
 
-Install with conda (cpu or gpu) or docker (gpu only).
+Install with conda (cpu, tpu, or gpu) or docker (gpu only).
 
 **install with conda (cpu):**
 ``` shell
