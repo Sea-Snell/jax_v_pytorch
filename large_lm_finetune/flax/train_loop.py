@@ -284,9 +284,8 @@ class TrainLoop(ConfigScript):
                 mask = (param_shape_arr != host_shape_arr).astype(jnp.int32)
                 return jax.lax.dynamic_slice(param, mask * host_shape_arr * process_idx, host_shape_arr)
             match_points = []
-            breakpoint()
             for i in range(mesh_devices.shape[mp_axis]):
-                process_id_match = jax.process_index() == tree.map_structure(lambda x: x.process_id, np.take(mesh_devices, i, axis=mp_axis))
+                process_id_match = (jax.process_index() == np.asarray(tree.map_structure(lambda x: x.process_index, np.take(mesh_devices, i, axis=mp_axis).tolist())))
                 is_match = np.all(process_id_match)
                 some_match = np.any(process_id_match)
                 assert is_match or (not some_match), "host devices must form a contiguous chunk"
