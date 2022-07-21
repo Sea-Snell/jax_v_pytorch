@@ -202,7 +202,7 @@ class TrainLoop(ConfigScript):
                 pkl.dump(self, f)
         
         # initalize wandb
-        if self.use_wandb:
+        if self.use_wandb and jax.process_index() == 0:
             wandb.init(project=self.wandb_project, config=asdict(self))
         
         # get rng
