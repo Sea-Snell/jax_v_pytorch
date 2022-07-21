@@ -121,7 +121,7 @@ class StandardEvaluator(ConfigScriptNoCache):
             decoder_attn_mask = (batch['decoder_input_ids'] != pad_id).astype(jnp.int32)
             batch['decoder_attention_mask'] = decoder_attn_mask
             logits = model(**batch, params=params, train=False).logits
-            _, logs = model_loss(logits[:, :-1, :], batch['decoder_input_ids'][:, 1:], decoder_attn_mask[:, :-1])
+            _, logs = model_loss(logits[:, :-1, :], batch['decoder_input_ids'][:, 1:], decoder_attn_mask[:, 1:])
             return logs
         
         def lm_eval_loss(params, batch):
@@ -129,7 +129,7 @@ class StandardEvaluator(ConfigScriptNoCache):
             attn_mask = (batch['input_ids'] != pad_id).astype(jnp.int32)
             batch['attention_mask'], batch['position_ids'] = attn_mask, position_ids
             logits = model(**batch, params=params, train=False).logits
-            _, logs = model_loss(logits[:, :-1, :], batch['input_ids'][:, 1:], attn_mask[:, :-1])
+            _, logs = model_loss(logits[:, :-1, :], batch['input_ids'][:, 1:], attn_mask[:, 1:])
             return logs
         
         if not model.config.is_encoder_decoder:
@@ -328,7 +328,7 @@ class TrainLoop(ConfigScript):
             batch['attention_mask'], batch['position_ids'] = attn_mask, position_ids
             def grad_loss(params: PyTree):
                 logits = model(**batch, params=params, dropout_rng=rng, train=True).logits
-                loss, logs = model_loss(logits[:, :-1, :], batch['input_ids'][:, 1:], attn_mask[:, :-1])
+                loss, logs = model_loss(logits[:, :-1, :], batch['input_ids'][:, 1:], attn_mask[:, 1:])
                 return loss, logs
             (_, logs), grads = jax.value_and_grad(grad_loss, has_aux=True)(params)
             updates, opt_state = optim.update(grads, opt_state, params)
@@ -344,7 +344,7 @@ class TrainLoop(ConfigScript):
             batch['decoder_attention_mask'] = decoder_attn_mask
             def grad_loss(params: PyTree):
                 logits = model(**batch, params=params, dropout_rng=rng, train=True).logits
-                loss, logs = model_loss(logits[:, :-1, :], batch['decoder_input_ids'][:, 1:], decoder_attn_mask[:, :-1])
+                loss, logs = model_loss(logits[:, :-1, :], batch['decoder_input_ids'][:, 1:], decoder_attn_mask[:, 1:])
                 return loss, logs
             (_, logs), grads = jax.value_and_grad(grad_loss, has_aux=True)(params)
             updates, opt_state = optim.update(grads, opt_state, params)
