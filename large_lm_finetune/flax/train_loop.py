@@ -293,7 +293,7 @@ class TrainLoop(ConfigScript):
                     match_points.append(i)
             assert len(match_points) == (mesh_devices.shape[mp_axis] // jax.process_count()), "number param devices on host must be the same for all hosts"
             assert sorted(match_points) == list(range(min(match_points), min(match_points)+len(match_points))), "host devices must form a contiguous chunk"
-            process_idx = min(match_points) // jax.process_count()
+            process_idx = min(match_points) // len(match_points)
             breakpoint()
             return jax.tree_util.tree_map(split_param, host_param_shapes, params, process_idx)
         
