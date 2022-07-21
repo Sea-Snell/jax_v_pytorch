@@ -96,7 +96,6 @@ def load_t5(model_str, dtype=jnp.float32, gradient_checkpoint=True, **kwargs):
         params.pop('lm_head')
         params['encoder'].pop('embed_tokens')
         params['decoder'].pop('embed_tokens')
-        breakpoint()
     else:
         try:
             model, params = FlaxT5ForConditionalGeneration.from_pretrained(model_str, _do_init=False, dtype=dtype, **kwargs)

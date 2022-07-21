@@ -82,21 +82,26 @@ def _get_partition_rules_t5():
         (("lm_head", "kernel"), P(None, "mp")), 
     ]
 
-def load_t5(model_str, dtype=jnp.float32, **kwargs):
+def load_t5(model_str, dtype=jnp.float32, gradient_checkpoint=True, **kwargs):
     if model_str == 'google/ul2':
         # have to load through pytorch and convert weights manually due to bug with transformers for partitioned weights
         # see: https://github.com/huggingface/transformers/pull/18170
         pytorch_model = T5ForConditionalGeneration.from_pretrained(model_str, **kwargs)
-        config = T5Config.from_pretrained(model_str, dtype=dtype, **kwargs)
+        config = T5Config.from_pretrained(model_str, dtype=dtype, gradient_checkpointing=gradient_checkpoint, **kwargs)
         model = FlaxT5ForConditionalGeneration(config, dtype=dtype, **kwargs)
         params = convert_pytorch_state_dict_to_flax(pytorch_model.state_dict(), model)
+        params.pop('lm_head')
+        params['encoder'].pop('embed_tokens')
+        params['decoder'].pop('embed_tokens')
     else:
         try:
             model, params = FlaxT5ForConditionalGeneration.from_pretrained(model_str, _do_init=False, dtype=dtype, **kwargs)
+            config = T5Config.from_pretrained(model_str, dtype=dtype, gradient_checkpointing=gradient_checkpoint, **kwargs)
+            model = FlaxT5ForConditionalGeneration(config, _do_init=False, dtype=dtype)
         except:
             model = FlaxT5ForConditionalGeneration.from_pretrained(model_str, _do_init=True, from_pt=True, dtype=dtype, **kwargs)
             params = model.params
-            config = T5Config.from_pretrained(model_str, dtype=dtype, **kwargs)
+            config = T5Config.from_pretrained(model_str, dtype=dtype, gradient_checkpointing=gradient_checkpoint, **kwargs)
             model = FlaxT5ForConditionalGeneration(config, _do_init=False, dtype=dtype)
     return model, freeze(params)
 
