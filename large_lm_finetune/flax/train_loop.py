@@ -308,7 +308,9 @@ class TrainLoop(ConfigScript):
 
         # mesh definition
         mesh_devices = np.array(jax.devices()).reshape(1, jax.device_count())
-        mesh_devices[:, 0:8], mesh_devices[:, 24:32] = mesh_devices[:, 24:32], mesh_devices[:, 0:8]
+        temp1 = mesh_devices[:, 0:8].copy()
+        temp2 = mesh_devices[:, 24:32].copy()
+        mesh_devices[:, 0:8], mesh_devices[:, 24:32] = temp2, temp1
         print('using mesh shape:', mesh_devices.shape)
         print('full mesh:', mesh_devices)
 
